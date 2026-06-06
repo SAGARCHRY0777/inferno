@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: inferno
+
+# Core stack — `kubectl apply -k k8s/` brings up everything below.
+resources:
+  - namespace.yaml
+  - config.yaml
+  - redis.yaml
+  - gateway.yaml
+  - workers.yaml
+  - chat.yaml
+  - frontend.yaml
+  - ingress.yaml
+
+# Queue-depth autoscalers are intentionally NOT included here — they require KEDA
+# in the cluster. Install KEDA, then apply them separately:
+#   kubectl apply -f k8s/autoscaling-keda.yaml
+
+# Pin all images in one place (override tags per environment here).
+images:
+  - name: ghcr.io/sagarchry0777/inferno
+    newTag: latest
+  - name: ghcr.io/sagarchry0777/inferno-frontend
+    newTag: latest

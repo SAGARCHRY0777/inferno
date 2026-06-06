@@ -1,0 +1,45 @@
+# Static console served by nginx, which reverse-proxies /api, /metrics and /chat
+# to the in-cluster "gateway" and "chat" Services (see frontend/nginx.conf — the
+# upstream names match these Service names, so it works unchanged in k8s).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: inferno
+  labels:
+    app: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/sagarchry0777/inferno-frontend:latest   # built from ./frontend/Dockerfile
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "50m", memory: "32Mi" }
+            limits: { cpu: "200m", memory: "128Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: inferno
+spec:
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

@@ -1,0 +1,27 @@
+# Shared, non-secret settings for every backend pod (gateway, workers, chat).
+# These map 1:1 to backend/core/config.py via the INFERNO_ env prefix + __ nesting.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inferno-config
+  namespace: inferno
+data:
+  # All pods reach Redis via the in-cluster Service DNS name "redis".
+  INFERNO_REDIS__URL: "redis://redis:6379/0"
+  INFERNO_LOGGING__RENDER_JSON: "true"
+  # Default to CPU; set "auto" (or "cuda") on GPU node pools.
+  INFERNO_INFERENCE__DEVICE: "cpu"
+  # Persist HuggingFace/torch downloads on the per-pod model-cache volume.
+  HF_HOME: "/models/hf"
+---
+# Placeholder for secret config (API keys, etc.). Replace before exposing publicly
+# and flip INFERNO_AUTH__ENABLED=true in the ConfigMap to enforce it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: inferno-secrets
+  namespace: inferno
+type: Opaque
+stringData:
+  # Example only — rotate this. Format/var name follow backend/core/config.py AuthSettings.
+  INFERNO_AUTH__API_KEYS: '["demo-key-change-me"]'

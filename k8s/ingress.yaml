@@ -1,0 +1,24 @@
+# Single entrypoint. All traffic goes to the frontend, whose nginx proxies
+# /api (REST + WebSockets), /metrics and /chat (SSE) to the gateway/chat
+# Services internally — so one host serves the whole app, same-origin (no CORS).
+# proxy-read-timeout is raised for long-lived WebSocket + SSE streams.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: inferno
+  namespace: inferno
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  rules:
+    - host: inferno.local          # add to /etc/hosts -> ingress IP, or use your domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

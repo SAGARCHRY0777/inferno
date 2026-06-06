@@ -1,0 +1,50 @@
+# Streaming chat service (local LLM, SSE). Bound to 0.0.0.0 so the frontend's
+# nginx can reach it as the in-cluster Service "chat". RAG-grounds answers by
+# calling the gateway.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat
+  namespace: inferno
+  labels:
+    app: chat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat
+  template:
+    metadata:
+      labels:
+        app: chat
+    spec:
+      containers:
+        - name: chat
+          image: ghcr.io/sagarchry0777/inferno:latest
+          command: ["uvicorn", "backend.chat.app:app", "--host", "0.0.0.0", "--port", "8100"]
+          ports:
+            - containerPort: 8100
+          env:
+            - { name: INFERNO_CHAT__GATEWAY_URL, value: "http://gateway:8000" }
+          envFrom:
+            - configMapRef: { name: inferno-config }
+          resources:
+            requests: { cpu: "500m", memory: "1.5Gi" }
+            limits: { cpu: "2", memory: "4Gi" }
+          volumeMounts:
+            - { name: model-cache, mountPath: /models }
+      volumes:
+        - { name: model-cache, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat
+  namespace: inferno
+spec:
+  selector:
+    app: chat
+  ports:
+    - name: http
+      port: 8100
+      targetPort: 8100

@@ -179,9 +179,15 @@ cd frontend && npm install && npm run dev             # UI
 ### Quickstart (Docker)
 
 ```bash
-docker compose up --build           # redis + gateway + 3 workers + frontend
+docker compose up --build           # redis + gateway + 6 workers + chat + frontend
 docker compose up --scale worker-dummy=3   # scale a model's worker pool
 ```
+
+### Kubernetes
+
+Full manifests in **[`k8s/`](k8s/)** — a Deployment per model, a gateway CPU HPA,
+and **KEDA queue-depth autoscalers** that scale each worker on its Redis-stream
+backlog. Deploy with `kubectl apply -k k8s/` (see [k8s/README.md](k8s/README.md)).
 
 ---
 

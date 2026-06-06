@@ -1,0 +1,161 @@
+# One Deployment per model — shared-nothing worker processes. Each runs
+# `python -m backend.worker.main` with INFERNO_WORKER__MODEL_NAME selecting the
+# model. Replica count is the floor; KEDA scales them on queue depth (see
+# autoscaling-keda.yaml). ML workers get a model-cache volume so HF/torch weights
+# download once per pod (HF_HOME=/models/hf comes from the ConfigMap).
+#
+# NOTE: this is one explicit Deployment per model for clarity. In a larger fleet
+# you'd template these (Kustomize components / a Helm chart) instead of repeating.
+
+# --- dummy-echo (dependency-free, tiny) -------------------------------------- #
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker-dummy, namespace: inferno, labels: { app: worker, model: dummy-echo } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: worker, model: dummy-echo } }
+  template:
+    metadata: { labels: { app: worker, model: dummy-echo } }
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/sagarchry0777/inferno:latest
+          command: ["python", "-m", "backend.worker.main"]
+          env:
+            - { name: INFERNO_WORKER__MODEL_NAME, value: "dummy-echo" }
+          envFrom:
+            - configMapRef: { name: inferno-config }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+---
+# --- distilbert-sentiment (HF text) ------------------------------------------ #
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker-distilbert, namespace: inferno, labels: { app: worker, model: distilbert-sentiment } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: worker, model: distilbert-sentiment } }
+  template:
+    metadata: { labels: { app: worker, model: distilbert-sentiment } }
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/sagarchry0777/inferno:latest
+          command: ["python", "-m", "backend.worker.main"]
+          env:
+            - { name: INFERNO_WORKER__MODEL_NAME, value: "distilbert-sentiment" }
+          envFrom:
+            - configMapRef: { name: inferno-config }
+          resources:
+            requests: { cpu: "500m", memory: "1Gi" }
+            limits: { cpu: "2", memory: "4Gi" }
+          volumeMounts:
+            - { name: model-cache, mountPath: /models }
+      volumes:
+        - { name: model-cache, emptyDir: {} }
+---
+# --- resnet-image (ONNX image classification) -------------------------------- #
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker-resnet, namespace: inferno, labels: { app: worker, model: resnet-image } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: worker, model: resnet-image } }
+  template:
+    metadata: { labels: { app: worker, model: resnet-image } }
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/sagarchry0777/inferno:latest
+          command: ["python", "-m", "backend.worker.main"]
+          env:
+            - { name: INFERNO_WORKER__MODEL_NAME, value: "resnet-image" }
+          envFrom:
+            - configMapRef: { name: inferno-config }
+          resources:
+            requests: { cpu: "500m", memory: "1Gi" }
+            limits: { cpu: "2", memory: "4Gi" }
+          volumeMounts:
+            - { name: model-cache, mountPath: /models }
+      volumes:
+        - { name: model-cache, emptyDir: {} }
+---
+# --- yolo-detect (object detection) ------------------------------------------ #
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker-yolo, namespace: inferno, labels: { app: worker, model: yolo-detect } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: worker, model: yolo-detect } }
+  template:
+    metadata: { labels: { app: worker, model: yolo-detect } }
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/sagarchry0777/inferno:latest
+          command: ["python", "-m", "backend.worker.main"]
+          env:
+            - { name: INFERNO_WORKER__MODEL_NAME, value: "yolo-detect" }
+            - { name: YOLO_CONFIG_DIR, value: "/models/ultralytics" }
+          envFrom:
+            - configMapRef: { name: inferno-config }
+          resources:
+            requests: { cpu: "750m", memory: "1.5Gi" }
+            limits: { cpu: "2", memory: "4Gi" }
+          volumeMounts:
+            - { name: model-cache, mountPath: /models }
+      volumes:
+        - { name: model-cache, emptyDir: {} }
+---
+# --- whisper-transcribe (speech-to-text) ------------------------------------- #
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker-whisper, namespace: inferno, labels: { app: worker, model: whisper-transcribe } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: worker, model: whisper-transcribe } }
+  template:
+    metadata: { labels: { app: worker, model: whisper-transcribe } }
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/sagarchry0777/inferno:latest
+          command: ["python", "-m", "backend.worker.main"]
+          env:
+            - { name: INFERNO_WORKER__MODEL_NAME, value: "whisper-transcribe" }
+          envFrom:
+            - configMapRef: { name: inferno-config }
+          resources:
+            requests: { cpu: "750m", memory: "1.5Gi" }
+            limits: { cpu: "2", memory: "4Gi" }
+          volumeMounts:
+            - { name: model-cache, mountPath: /models }
+      volumes:
+        - { name: model-cache, emptyDir: {} }
+---
+# --- rag-search (retrieve + rerank) ------------------------------------------ #
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker-rag, namespace: inferno, labels: { app: worker, model: rag-search } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: worker, model: rag-search } }
+  template:
+    metadata: { labels: { app: worker, model: rag-search } }
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/sagarchry0777/inferno:latest
+          command: ["python", "-m", "backend.worker.main"]
+          env:
+            - { name: INFERNO_WORKER__MODEL_NAME, value: "rag-search" }
+          envFrom:
+            - configMapRef: { name: inferno-config }
+          resources:
+            requests: { cpu: "500m", memory: "1Gi" }
+            limits: { cpu: "2", memory: "4Gi" }
+          volumeMounts:
+            - { name: model-cache, mountPath: /models }
+      volumes:
+        - { name: model-cache, emptyDir: {} }

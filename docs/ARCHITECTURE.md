@@ -131,7 +131,7 @@ The ten questions most worth answering about why this system is built the way it
 
 - **Not deployed live, and models download at runtime.** This is a clone-and-run portfolio project: the first request to a model pays the HuggingFace/weights download and load cost, there's no warm model cache baked into an image, and nothing is running behind a public URL with real traffic.
 
-- **No Kubernetes / orchestration yet.** Scale-out is "launch more worker processes" by hand; there's no autoscaler reacting to queue depth, no rolling-deploy story, no pod scheduling onto GPU nodes. The graceful-drain SIGTERM handling is the foundation for k8s, but the orchestration layer isn't there.
+- **Kubernetes manifests are provided but not yet battle-tested.** `k8s/` ships a Deployment per model, a gateway CPU HPA, and **KEDA queue-depth autoscalers** that scale each worker on its `inferno:jobs:<model>` Redis-stream backlog — built on the worker's SIGTERM graceful-drain. Still open: GPU node scheduling is documented but unproven, the autoscaler thresholds aren't load-tuned, and there are no NetworkPolicies / pod-security hardening yet.
 
 - **At-least-once means duplicate delivery is possible.** The publish-before-ack design guarantees no lost work, but a crash between publish and ack causes the job to be reprocessed and published twice. It's idempotent at the result-key level (same `job_id`, TTL'd value), but a downstream consumer that isn't idempotent would see the duplicate — there's no exactly-once dedup table.
 
