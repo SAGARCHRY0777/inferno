@@ -64,6 +64,10 @@ vehicles tracing real San-Francisco roads). Full-length recording:
 
 ## Architecture
 
+> **Deep dive:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the full request
+> lifecycle, every subsystem (what/how/why-this-not-that), the key design
+> decisions, and limitations & future work.
+
 ```
         ┌──────────────────────────────────────────────────────────┐
         │            Vite + React + TS console (Zustand)            │
