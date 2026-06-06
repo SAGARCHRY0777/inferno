@@ -1,0 +1,13 @@
+{
+  "_comment": "Inferno MCP server config. Copy the 'inferno' block into your MCP client's config (Claude Desktop: %APPDATA%\\Claude\\claude_desktop_config.json on Windows, ~/Library/Application Support/Claude/claude_desktop_config.json on macOS), then restart the client. Make sure the Inferno gateway + workers are running (scripts\\run-all.bat). Edit the two absolute paths to match your machine.",
+  "mcpServers": {
+    "inferno": {
+      "command": "C:\\Users\\YOU\\AppData\\Local\\miniconda3\\envs\\test\\python.exe",
+      "args": ["-m", "backend.mcp_server.server"],
+      "env": {
+        "PYTHONPATH": "D:\\project\\inferno",
+        "INFERNO_MCP_GATEWAY": "http://127.0.0.1:8000"
+      }
+    }
+  }
+}

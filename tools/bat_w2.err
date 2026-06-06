@@ -1,0 +1,57 @@
+C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\torch\cuda\__init__.py:129: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 11010). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\builder\windows\pytorch\c10\cuda\CUDAFunctions.cpp:108.)
+  return torch._C._cuda_getDeviceCount() > 0
+Traceback (most recent call last):
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\connection.py", line 592, in read_response
+    response = self._parser.read_response(disable_decoding=disable_decoding)
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\_parsers\resp2.py", line 15, in read_response
+    result = self._read_response(disable_decoding=disable_decoding)
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\_parsers\resp2.py", line 25, in _read_response
+    raw = self._buffer.readline()
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\_parsers\socket.py", line 115, in readline
+    self._read_from_socket()
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\_parsers\socket.py", line 65, in _read_from_socket
+    data = self._sock.recv(socket_read_size)
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "d:\project\inferno\backend\worker\main.py", line 158, in <module>
+    main()
+  File "d:\project\inferno\backend\worker\main.py", line 151, in main
+    Worker(broker, model, worker_id).run()
+  File "d:\project\inferno\backend\worker\main.py", line 68, in run
+    self._loop()
+  File "d:\project\inferno\backend\worker\main.py", line 77, in _loop
+    items, window_closed_ts = self._window.collect()
+  File "d:\project\inferno\backend\worker\batcher.py", line 44, in collect
+    first = self._broker.read_first(
+  File "d:\project\inferno\backend\broker\redis_broker.py", line 164, in read_first
+    resp = self._client.xreadgroup(
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\commands\core.py", line 4024, in xreadgroup
+    return self.execute_command("XREADGROUP", *pieces)
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\client.py", line 559, in execute_command
+    return self._execute_command(*args, **options)
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\client.py", line 567, in _execute_command
+    return conn.retry.call_with_retry(
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\retry.py", line 65, in call_with_retry
+    fail(error)
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\client.py", line 571, in <lambda>
+    lambda error: self._disconnect_raise(conn, error),
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\client.py", line 555, in _disconnect_raise
+    raise error
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\retry.py", line 62, in call_with_retry
+    return do()
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\client.py", line 568, in <lambda>
+    lambda: self._send_command_parse_response(
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\client.py", line 542, in _send_command_parse_response
+    return self.parse_response(conn, command_name, **options)
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\client.py", line 584, in parse_response
+    response = connection.read_response()
+  File "C:\Users\DSI-LPT-015\AppData\Local\miniconda3\envs\test\lib\site-packages\redis\connection.py", line 600, in read_response
+    raise ConnectionError(
+redis.exceptions.ConnectionError: Error while reading from localhost:6379 : (10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)

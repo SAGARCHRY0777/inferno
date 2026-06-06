@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Environment / secrets
+.env
+
+# Model artifacts (regenerated on first worker start)
+artifacts/
+
+# Downloaded model weights (auto-fetched on first run, e.g. ultralytics YOLO)
+*.pt
+*.onnx
+*.pth
+*.safetensors
+*.gguf
+*.ckpt
+
+# Bundled portable Redis + runtime logs (downloaded/created locally)
+tools/redis/
+tools/*.log
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Loadtest / coverage
+.coverage
+htmlcov/
+
+# Demo capture intermediates (the GIF + webm are kept; raw frames are rebuilt)
+docs/demo/frames/
+docs/demo/video/
+
+# Build outputs (rebuildable): project wheel + multi-GB conda-pack env tarball.
+# The env RECIPE (environment.yml, requirements.lock.txt) IS committed.
+dist/
+build/
+*.egg-info/

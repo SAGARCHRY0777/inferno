@@ -1,0 +1,11 @@
+2026-06-06 14:36:08 [info     ] model_specs_loaded             component=registry count=6 names=['dummy-echo', 'resnet-image', 'distilbert-sentiment', 'yolo-detect', 'whisper-transcribe', 'semantic-search'] service=worker
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2026-06-06T09:06:39.271690Z [info     ] faster_whisper_loaded          component=model.faster_whisper compute_type=int8 device=cpu service=worker size=tiny.en
+2026-06-06T09:06:39.310240Z [info     ] worker_ready                   component=worker model_name=whisper-transcribe service=worker worker_id=worker-DESKTOP-LI412IE-18420-8a314e
+2026-06-06 14:38:49 [debug    ] window_closed                  batch_size=1 component=batcher full=False model_name=whisper-transcribe service=worker
+Processing audio with duration 00:13.000
+2026-06-06T09:08:50.199415Z [info     ] batch_processed                batch_size=1 component=worker errors=0 model_name=whisper-transcribe service=worker total=1 worker_id=worker-DESKTOP-LI412IE-18420-8a314e
+2026-06-06 15:20:11 [debug    ] window_closed                  batch_size=1 component=batcher full=False model_name=whisper-transcribe service=worker
+Processing audio with duration 00:13.000
+2026-06-06T09:50:13.629575Z [info     ] batch_processed                batch_size=1 component=worker errors=0 model_name=whisper-transcribe service=worker total=2 worker_id=worker-DESKTOP-LI412IE-18420-8a314e
+2026-06-06T09:52:21.643758Z [warning  ] redis_error_retrying           component=worker error=Error while reading from localhost:6379 : (10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None) model_name=whisper-transcribe service=worker worker_id=worker-DESKTOP-LI412IE-18420-8a314e

@@ -1,0 +1,6 @@
+2026-06-06 16:16:24 [info     ] model_specs_loaded             component=registry count=6 names=['dummy-echo', 'resnet-image', 'distilbert-sentiment', 'yolo-detect', 'whisper-transcribe', 'semantic-search'] service=worker
+2026-06-06T10:46:36.684043Z [info     ] yolo_loaded                    classes=80 component=model.yolo device=cpu service=worker weights=yolov8n.pt
+2026-06-06T10:46:36.739766Z [info     ] worker_ready                   component=worker model_name=yolo-detect service=worker worker_id=worker-DESKTOP-LI412IE-16596-06fff8
+2026-06-06 16:17:15 [debug    ] window_closed                  batch_size=1 component=batcher full=False model_name=yolo-detect service=worker
+2026-06-06T10:47:19.268014Z [info     ] batch_processed                batch_size=1 component=worker errors=0 model_name=yolo-detect service=worker total=1 worker_id=worker-DESKTOP-LI412IE-16596-06fff8
+2026-06-06T10:48:41.615001Z [warning  ] redis_error_retrying           component=worker error=Error while reading from localhost:6379 : (10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None) model_name=yolo-detect service=worker worker_id=worker-DESKTOP-LI412IE-16596-06fff8

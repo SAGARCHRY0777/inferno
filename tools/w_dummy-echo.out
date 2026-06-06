@@ -1,0 +1,22 @@
+2026-06-06 14:36:04 [info     ] model_specs_loaded             component=registry count=6 names=['dummy-echo', 'resnet-image', 'distilbert-sentiment', 'yolo-detect', 'whisper-transcribe', 'semantic-search'] service=worker
+2026-06-06T09:06:07.273415Z [info     ] worker_ready                   component=worker model_name=dummy-echo service=worker worker_id=worker-DESKTOP-LI412IE-19652-e38f95
+2026-06-06 14:38:49 [debug    ] window_closed                  batch_size=1 component=batcher full=False model_name=dummy-echo service=worker
+2026-06-06T09:08:49.173324Z [info     ] batch_processed                batch_size=1 component=worker errors=0 model_name=dummy-echo service=worker total=1 worker_id=worker-DESKTOP-LI412IE-19652-e38f95
+2026-06-06 14:39:50 [debug    ] window_closed                  batch_size=5 component=batcher full=False model_name=dummy-echo service=worker
+2026-06-06T09:09:50.725922Z [info     ] batch_processed                batch_size=5 component=worker errors=0 model_name=dummy-echo service=worker total=6 worker_id=worker-DESKTOP-LI412IE-19652-e38f95
+2026-06-06 14:39:52 [debug    ] window_closed                  batch_size=4 component=batcher full=False model_name=dummy-echo service=worker
+2026-06-06T09:09:52.774719Z [info     ] batch_processed                batch_size=4 component=worker errors=0 model_name=dummy-echo service=worker total=10 worker_id=worker-DESKTOP-LI412IE-19652-e38f95
+2026-06-06 14:39:52 [debug    ] window_closed                  batch_size=3 component=batcher full=False model_name=dummy-echo service=worker
+2026-06-06T09:09:52.820640Z [info     ] batch_processed                batch_size=3 component=worker errors=0 model_name=dummy-echo service=worker total=13 worker_id=worker-DESKTOP-LI412IE-19652-e38f95
+2026-06-06 14:47:03 [debug    ] window_closed                  batch_size=17 component=batcher full=False model_name=dummy-echo service=worker
+2026-06-06T09:17:03.579522Z [info     ] batch_processed                batch_size=17 component=worker errors=0 model_name=dummy-echo service=worker total=30 worker_id=worker-DESKTOP-LI412IE-19652-e38f95
+2026-06-06 14:47:03 [debug    ] window_closed                  batch_size=2 component=batcher full=False model_name=dummy-echo service=worker
+2026-06-06T09:17:03.803411Z [info     ] batch_processed                batch_size=2 component=worker errors=0 model_name=dummy-echo service=worker total=32 worker_id=worker-DESKTOP-LI412IE-19652-e38f95
+2026-06-06 15:01:51 [warning  ] gpu_collect_failed             component=sysinfo error=The operating system has blocked the request. service=worker
+2026-06-06 15:19:28 [debug    ] window_closed                  batch_size=5 component=batcher full=False model_name=dummy-echo service=worker
+2026-06-06T09:49:28.409720Z [info     ] batch_processed                batch_size=5 component=worker errors=0 model_name=dummy-echo service=worker total=37 worker_id=worker-DESKTOP-LI412IE-19652-e38f95
+2026-06-06 15:19:28 [debug    ] window_closed                  batch_size=11 component=batcher full=False model_name=dummy-echo service=worker
+2026-06-06T09:49:28.498279Z [info     ] batch_processed                batch_size=11 component=worker errors=0 model_name=dummy-echo service=worker total=48 worker_id=worker-DESKTOP-LI412IE-19652-e38f95
+2026-06-06 15:19:28 [debug    ] window_closed                  batch_size=2 component=batcher full=False model_name=dummy-echo service=worker
+2026-06-06T09:49:28.542989Z [info     ] batch_processed                batch_size=2 component=worker errors=0 model_name=dummy-echo service=worker total=50 worker_id=worker-DESKTOP-LI412IE-19652-e38f95
+2026-06-06T09:52:21.637822Z [warning  ] redis_error_retrying           component=worker error=Error while reading from localhost:6379 : (10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None) model_name=dummy-echo service=worker worker_id=worker-DESKTOP-LI412IE-19652-e38f95

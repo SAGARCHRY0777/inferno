@@ -1,0 +1,23 @@
+# Slim CORE image for a free-tier cloud demo: gateway + the dependency-free
+# dummy model, NO torch/onnx/transformers (the heavy ML stack needs a paid box).
+# The same image runs the gateway (default) or a dummy worker (override command).
+FROM python:3.10-slim
+
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1
+WORKDIR /app
+
+# Runtime deps only. The gateway/worker never run the test + load-test tooling
+# (pytest, locust), and locust pulls C-extension builds (gevent/geventhttpclient)
+# that need a toolchain on slim. Dropping them keeps the image lean AND makes the
+# install pure-wheel, so no compiler is required.
+COPY requirements.txt ./
+RUN grep -ivE '^(pytest|locust)' requirements.txt > requirements-runtime.txt \
+    && pip install --upgrade pip \
+    && pip install -r requirements-runtime.txt \
+    && rm requirements-runtime.txt
+
+COPY backend ./backend
+
+# Gateway by default; workers override `command:`/`CMD`.
+EXPOSE 8000
+CMD ["sh", "-c", "uvicorn backend.gateway.app:app --host 0.0.0.0 --port ${PORT:-8000}"]

@@ -1,0 +1,10 @@
+2026-06-06 17:13:21 [info     ] model_specs_loaded             component=registry count=7 names=['dummy-echo', 'resnet-image', 'distilbert-sentiment', 'yolo-detect', 'whisper-transcribe', 'semantic-search', 'rag-search'] service=worker
+Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Use pytorch device: cpu
+2026-06-06T11:44:10.596666Z [info     ] rag_loaded                     component=model.rag device=cpu passages=16 rerank=True service=worker sources=3
+2026-06-06T11:44:11.356372Z [info     ] worker_ready                   component=worker model_name=rag-search service=worker worker_id=worker-DESKTOP-LI412IE-16664-ff8fe4
+2026-06-06 17:14:26 [debug    ] window_closed                  batch_size=1 component=batcher full=False model_name=rag-search service=worker
+2026-06-06T11:44:26.877497Z [info     ] batch_processed                batch_size=1 component=worker errors=0 model_name=rag-search service=worker total=1 worker_id=worker-DESKTOP-LI412IE-16664-ff8fe4
+2026-06-06 17:14:26 [debug    ] window_closed                  batch_size=1 component=batcher full=False model_name=rag-search service=worker
+2026-06-06T11:44:27.148114Z [info     ] batch_processed                batch_size=1 component=worker errors=0 model_name=rag-search service=worker total=2 worker_id=worker-DESKTOP-LI412IE-16664-ff8fe4

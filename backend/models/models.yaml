@@ -1,0 +1,78 @@
+# --------------------------------------------------------------------------- #
+# Servable model registry (config-driven).
+#
+# Add a model by appending an entry here -- no code changes needed as long as a
+# matching `kind` is registered (see backend/models/registry.py). Each worker
+# loads exactly ONE model, selected via INFERNO_WORKER__MODEL_NAME.
+#
+#   name        : what clients request in InferenceRequest.model_name
+#   kind        : registered implementation (dummy | onnx-image | hf-text | ...)
+#   input_type  : image | text | audio  (validated at the gateway)
+#   task        : classification | detection | transcription | generation | embedding
+#                 (drives how the UI renders the result -- the generalization hook)
+#   params      : free-form, passed to the model constructor
+# --------------------------------------------------------------------------- #
+models:
+  - name: dummy-echo
+    kind: dummy
+    input_type: text
+    task: classification
+    description: Dependency-free deterministic model for bring-up and tests.
+    params:
+      labels: [positive, neutral, negative]
+
+  - name: resnet-image
+    kind: onnx-image
+    input_type: image
+    task: classification
+    description: ResNet-18 ImageNet classifier exported to ONNX Runtime.
+    params:
+      top_k: 5
+
+  - name: distilbert-sentiment
+    kind: hf-text
+    input_type: text
+    task: classification
+    description: DistilBERT SST-2 sentiment classifier (Hugging Face).
+    params:
+      model_id: distilbert-base-uncased-finetuned-sst-2-english
+      max_length: 256
+      top_k: 2
+
+  - name: yolo-detect
+    kind: yolo-detect
+    input_type: image
+    task: detection
+    description: YOLOv8 object detection with bounding boxes (Ultralytics).
+    params:
+      weights: yolov8n.pt
+      conf: 0.35
+      max_det: 20
+
+  - name: whisper-transcribe
+    kind: faster-whisper-asr
+    input_type: audio
+    task: transcription
+    description: Whisper speech-to-text via faster-whisper / CTranslate2 (4-6x faster).
+    params:
+      model_size: tiny.en
+      beam_size: 1
+
+  - name: semantic-search
+    kind: semantic-search
+    input_type: text
+    task: search
+    description: Embedding-based semantic search over a seeded corpus (bi-encoder only).
+    params:
+      model_id: sentence-transformers/all-MiniLM-L6-v2
+      top_k: 5
+
+  - name: rag-search
+    kind: rag-search
+    input_type: text
+    task: search
+    description: RAG retrieval over a document corpus - bi-encoder retrieve, cross-encoder rerank, cited passages.
+    params:
+      top_n: 12
+      top_k: 4
+      rerank: true

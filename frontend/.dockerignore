@@ -1,0 +1,21 @@
+# The frontend image build context is ./frontend. Without this, `COPY . .` would
+# pull in node_modules and a stale dist (then npm install rebuilds anyway) and
+# the Playwright capture tooling — bloating the build and busting layer cache.
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Playwright capture / screenshot tooling + route-prefetch (dev-only)
+demo-capture.mjs
+screenshot.mjs
+screenshots-all.mjs
+scripts/
+playwright-report/
+test-results/
+
+# Misc
+*.log
+.DS_Store
+Dockerfile
+.dockerignore

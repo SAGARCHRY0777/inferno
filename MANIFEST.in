@@ -1,0 +1,9 @@
+# Files to include in the source distribution (sdist). The wheel's runtime data
+# is declared via [tool.setuptools.package-data] in pyproject.toml.
+include LICENSE
+include README.md
+include requirements.txt requirements-ml-cpu.txt requirements-ml-gpu.txt
+recursive-include backend/models *.yaml
+recursive-include backend/models/corpus *.md
+global-exclude __pycache__/*
+global-exclude *.py[cod]

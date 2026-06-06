@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Default palette (Midnight). Swapped at runtime by src/theme/themes.ts.
+     Solid colors are RGB triplets so Tailwind opacity modifiers work. */
+  :root {
+    color-scheme: dark;
+    --c-base: 10 11 15;
+    --c-surface: 16 18 24;
+    --c-surface-raised: 22 25 34;
+    --c-surface-hover: 28 32 43;
+    --c-ink: 231 236 243;
+    --c-ink-muted: 154 164 178;
+    --c-ink-faint: 91 101 115;
+    --c-accent: 0 229 255;
+    --c-accent-dim: 0 184 204;
+    --c-warn: 255 176 32;
+    --c-danger: 255 77 109;
+    --c-ok: 61 220 151;
+    --c-hairline: rgba(255, 255, 255, 0.09);
+    --c-accent-glow: rgba(0, 229, 255, 0.35);
+    --c-warn-glow: rgba(255, 176, 32, 0.3);
+    --c-danger-glow: rgba(255, 77, 109, 0.3);
+    --c-bg-glow-1: rgba(0, 229, 255, 0.07);
+    --c-bg-glow-2: rgba(120, 90, 255, 0.06);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-base text-ink font-sans antialiased;
+    background-image:
+      radial-gradient(1200px 600px at 80% -10%, var(--c-bg-glow-1), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, var(--c-bg-glow-2), transparent 60%);
+    background-attachment: fixed;
+    transition: background-color 0.4s ease, color 0.4s ease;
+  }
+
+  /* Telemetry digits never jitter as they stream. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+@layer components {
+  .glass {
+    @apply rounded-xl2 border border-hairline bg-surface/70 shadow-glass backdrop-blur-xl;
+  }
+
+  .glass-raised {
+    @apply rounded-xl2 border border-hairline bg-surface-raised/80 shadow-glass backdrop-blur-xl;
+  }
+
+  .hairline {
+    @apply border-hairline;
+  }
+
+  .label-eyebrow {
+    @apply text-[11px] font-medium uppercase tracking-[0.18em] text-ink-faint;
+  }
+
+  .focusable {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-base;
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-surface-raised;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer;
+  }
+}
+
+/* Slim, on-brand scrollbars. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-surface-hover;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Fleet map: glide vehicle markers between simulation ticks instead of
+   teleporting. Disabled during leaflet's own zoom animation to avoid lag. */
+.av-marker {
+  transition: transform 0.12s linear;
+}
+.leaflet-zoom-anim .av-marker {
+  transition: none;
+}
+
+/* Honor reduced-motion: disable non-essential animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

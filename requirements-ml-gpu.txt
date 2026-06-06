@@ -1,0 +1,27 @@
+# --------------------------------------------------------------------------- #
+# ML model stack — CUDA 12.4 build (NVIDIA GPU).
+#
+# Install AFTER requirements.txt:
+#   pip install -r requirements.txt
+#   pip install -r requirements-ml-gpu.txt
+#
+# torch/torchvision come from PyTorch's CUDA 12.4 wheel index. At runtime the
+# platform auto-selects CUDA when the driver supports it and transparently falls
+# back to CPU otherwise (INFERNO_INFERENCE__DEVICE=auto), so this same file works
+# even on a box whose driver is too old for cu124 — it just runs on CPU.
+# --------------------------------------------------------------------------- #
+--extra-index-url https://download.pytorch.org/whl/cu124
+
+torch==2.5.1+cu124
+torchvision==0.20.1+cu124
+onnxruntime-gpu==1.20.1
+onnx==1.17.0
+transformers==4.47.1
+tokenizers==0.21.4
+safetensors==0.7.0
+ultralytics==8.3.55
+faster-whisper==1.1.0
+sentence-transformers==3.3.1
+soundfile==0.12.1
+pillow==11.0.0
+numpy==2.2.6

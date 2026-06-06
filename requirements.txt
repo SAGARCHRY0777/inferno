@@ -1,0 +1,44 @@
+# --------------------------------------------------------------------------- #
+# Inferno core backend dependencies (no heavy ML).
+#
+# These run the gateway, the worker plumbing, the dummy model, the metrics, and
+# the full test suite. Install a model stack on top with ONE of:
+#   pip install -r requirements-ml-gpu.txt   # CUDA 12.4
+#   pip install -r requirements-ml-cpu.txt   # CPU-only
+#
+# Pinned to the exact versions verified on Python 3.10 (conda env `test`).
+# --------------------------------------------------------------------------- #
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+starlette==0.41.3
+redis==5.2.1
+pydantic==2.10.4
+pydantic-settings==2.7.1
+structlog==24.4.0
+prometheus-client==0.21.1
+psutil==6.1.1
+PyYAML==6.0.2
+python-multipart==0.0.20
+websockets==14.1
+anyio==4.7.0
+
+# Optional GPU telemetry. The import is guarded, so this is safe on CPU-only
+# hosts (it simply reports no GPUs). Tiny, pure-Python NVML bindings.
+nvidia-ml-py==12.560.30
+
+# Optional OpenTelemetry tracing (imports are guarded; only used when
+# INFERNO_OTEL__ENABLED=true).
+opentelemetry-sdk==1.29.0
+opentelemetry-exporter-otlp-proto-http==1.29.0
+opentelemetry-instrumentation-fastapi==0.50b0
+
+# MCP server (exposes the models as agent tools). sse-starlette is pinned to a
+# version compatible with FastAPI's starlette (<0.42); newer ones conflict.
+mcp==1.2.0
+sse-starlette==1.8.2
+
+# Test + load-test tooling.
+httpx==0.28.1
+pytest==8.3.4
+pytest-asyncio==0.25.1
+locust==2.32.4

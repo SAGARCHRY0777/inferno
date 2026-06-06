@@ -1,0 +1,32 @@
+# Fly.io config for the Inferno gateway (core image, no heavy ML).
+# Deploy:  fly launch --no-deploy   (then edit app name)  ->  fly deploy
+# Set Redis:  fly redis create   (Upstash)  -> copy the URL into the secret below:
+#   fly secrets set INFERNO_REDIS__URL="redis://default:...@fly-...upstash.io:6379"
+# Run a dummy worker as a second process group (or a separate app) so the gateway
+# has something to serve.
+
+app = "inferno-gateway"           # <-- change to a unique name
+primary_region = "iad"
+
+[build]
+  dockerfile = "deploy/Dockerfile.core"
+
+[env]
+  INFERNO_SERVER__CORS_ORIGINS = '["*"]'   # tighten to your frontend origin in prod
+  INFERNO_LOGGING__RENDER_JSON = "true"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+# A lightweight dummy worker alongside the gateway so /infer returns results.
+[processes]
+  gateway = "uvicorn backend.gateway.app:app --host 0.0.0.0 --port 8000"
+  worker  = "python -m backend.worker.main"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

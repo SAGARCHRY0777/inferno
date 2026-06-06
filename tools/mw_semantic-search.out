@@ -1,0 +1,7 @@
+2026-06-06 16:30:56 [info     ] model_specs_loaded             component=registry count=6 names=['dummy-echo', 'resnet-image', 'distilbert-sentiment', 'yolo-detect', 'whisper-transcribe', 'semantic-search'] service=worker
+Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2026-06-06T11:01:11.057083Z [info     ] semantic_search_loaded         component=model.search docs=20 model_id=sentence-transformers/all-MiniLM-L6-v2 service=worker
+2026-06-06T11:01:11.090944Z [info     ] worker_ready                   component=worker model_name=semantic-search service=worker worker_id=worker-DESKTOP-LI412IE-19508-c3caf0
+2026-06-06 16:43:52 [debug    ] window_closed                  batch_size=1 component=batcher full=False model_name=semantic-search service=worker
+2026-06-06T11:13:52.925493Z [info     ] batch_processed                batch_size=1 component=worker errors=0 model_name=semantic-search service=worker total=1 worker_id=worker-DESKTOP-LI412IE-19508-c3caf0
+2026-06-06T11:18:31.358741Z [warning  ] redis_error_retrying           component=worker error=Error while reading from localhost:6379 : (10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None) model_name=semantic-search service=worker worker_id=worker-DESKTOP-LI412IE-19508-c3caf0

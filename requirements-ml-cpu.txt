@@ -1,0 +1,25 @@
+# --------------------------------------------------------------------------- #
+# ML model stack — CPU-only build (no GPU / no CUDA).
+#
+# Install AFTER requirements.txt:
+#   pip install -r requirements.txt
+#   pip install -r requirements-ml-cpu.txt
+#
+# Uses PyTorch's CPU wheel index and the CPU build of ONNX Runtime. Identical
+# application code path as the GPU stack — only the wheels differ.
+# --------------------------------------------------------------------------- #
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.5.1
+torchvision==0.20.1
+onnxruntime==1.23.2   # aligned with the verified env (requirements.lock.txt)
+onnx==1.17.0
+transformers==4.47.1
+tokenizers==0.21.4
+safetensors==0.7.0
+ultralytics==8.3.55
+faster-whisper==1.1.0
+sentence-transformers==3.3.1
+soundfile==0.12.1
+pillow==11.0.0
+numpy==2.2.6

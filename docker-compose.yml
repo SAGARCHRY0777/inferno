@@ -1,0 +1,170 @@
+# --------------------------------------------------------------------------- #
+# Inferno full stack via Docker Compose.
+#
+#   docker compose up redis              # just the broker (conda workflow is primary)
+#   docker compose up --build            # the whole platform (gateway + 6 workers + chat + UI)
+#
+# Scale a model's worker pool:  docker compose up --build --scale worker-dummy=3
+#
+# Notes:
+#  * One backend image is built once and reused by the gateway, every worker, and
+#    the chat service (the command/env selects the role).
+#  * Heavy model weights download on first use; the shared `model-cache` volume
+#    (mounted at /app/artifacts with HF_HOME inside it) persists them across runs.
+#  * The frontend talks to the gateway and the chat service through nginx, so the
+#    browser only ever hits the frontend origin (no CORS, no hardcoded hosts).
+# --------------------------------------------------------------------------- #
+services:
+  redis:
+    image: redis:7-alpine
+    # appendonly + a named volume => the queue survives restarts (durable broker).
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  gateway:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      INFERNO_REDIS__URL: redis://redis:6379/0
+      INFERNO_LOGGING__RENDER_JSON: "true"
+    ports:
+      - "8000:8000"
+    # Gate dependents on real app readiness (Redis connected, hub started), not
+    # just container start. python is used because slim has no curl/wget.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health').status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  # --- model workers (one per model; mirrors scripts/run-all.bat) ------------ #
+  worker-dummy:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "backend.worker.main"]
+    environment:
+      INFERNO_REDIS__URL: redis://redis:6379/0
+      INFERNO_WORKER__MODEL_NAME: dummy-echo
+    volumes:
+      - model-cache:/app/artifacts
+
+  worker-distilbert:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "backend.worker.main"]
+    environment:
+      INFERNO_REDIS__URL: redis://redis:6379/0
+      INFERNO_WORKER__MODEL_NAME: distilbert-sentiment
+      INFERNO_INFERENCE__DEVICE: cpu
+      HF_HOME: /app/artifacts/hf
+    volumes:
+      - model-cache:/app/artifacts
+
+  worker-resnet:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "backend.worker.main"]
+    environment:
+      INFERNO_REDIS__URL: redis://redis:6379/0
+      INFERNO_WORKER__MODEL_NAME: resnet-image
+      INFERNO_INFERENCE__DEVICE: cpu
+      HF_HOME: /app/artifacts/hf
+    volumes:
+      - model-cache:/app/artifacts
+
+  worker-yolo:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "backend.worker.main"]
+    environment:
+      INFERNO_REDIS__URL: redis://redis:6379/0
+      INFERNO_WORKER__MODEL_NAME: yolo-detect
+      INFERNO_INFERENCE__DEVICE: cpu
+      HF_HOME: /app/artifacts/hf
+      YOLO_CONFIG_DIR: /app/artifacts/ultralytics
+    volumes:
+      - model-cache:/app/artifacts
+
+  worker-whisper:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "backend.worker.main"]
+    environment:
+      INFERNO_REDIS__URL: redis://redis:6379/0
+      INFERNO_WORKER__MODEL_NAME: whisper-transcribe
+      INFERNO_INFERENCE__DEVICE: cpu
+      HF_HOME: /app/artifacts/hf
+    volumes:
+      - model-cache:/app/artifacts
+
+  worker-rag:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "backend.worker.main"]
+    environment:
+      INFERNO_REDIS__URL: redis://redis:6379/0
+      INFERNO_WORKER__MODEL_NAME: rag-search
+      INFERNO_INFERENCE__DEVICE: cpu
+      HF_HOME: /app/artifacts/hf
+    volumes:
+      - model-cache:/app/artifacts
+
+  # --- streaming chat service (local LLM, SSE, RAG-grounded via the gateway) -- #
+  chat:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+      gateway:
+        condition: service_healthy
+    # The module's __main__ binds 127.0.0.1; run uvicorn directly on 0.0.0.0 so
+    # nginx in the frontend container can reach it as chat:8100.
+    command: ["uvicorn", "backend.chat.app:app", "--host", "0.0.0.0", "--port", "8100"]
+    environment:
+      INFERNO_CHAT__GATEWAY_URL: http://gateway:8000
+      INFERNO_LOGGING__RENDER_JSON: "true"
+      HF_HOME: /app/artifacts/hf
+    volumes:
+      - model-cache:/app/artifacts
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Empty => the bundle calls a RELATIVE /chat, which nginx proxies to the
+        # chat service. (Vite vars are build-time; a runtime env would be a no-op.)
+        VITE_CHAT_URL: ""
+    depends_on:
+      gateway:
+        condition: service_healthy
+      chat:
+        condition: service_started
+    ports:
+      - "5173:80"
+
+volumes:
+  redis-data:
+  model-cache:

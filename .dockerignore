@@ -1,0 +1,50 @@
+# Keep the backend build context tiny and secret-free. The backend image
+# (Dockerfile / deploy/Dockerfile.core) only needs requirements*.txt + backend/.
+# Without this file the daemon would receive node_modules, model weights, the
+# demo media, the portable Redis binary, and any local .env — slow and unsafe.
+
+# Python caches
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Secrets / local environment
+.env
+*.env
+!.env.example
+
+# VCS / CI / editors
+.git/
+.gitignore
+.github/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Frontend has its OWN image and build context (./frontend)
+frontend/
+
+# Local runtime state, downloaded model weights, bundled portable Redis
+artifacts/
+tools/
+*.log
+
+# Docs + demo media (heavy, not needed in the image)
+docs/
+*.gif
+*.webm
+
+# Packaging / env artifacts (not needed inside the image)
+dist/
+build/
+*.whl
+*.tar.gz
+*.egg-info/
+environment.yml
+requirements.lock.txt
+
+# Windows launcher scripts (irrelevant inside Linux containers)
+scripts/
