@@ -31,6 +31,7 @@ import {
 } from "@/lib/fleet";
 import { type Place, searchPlaces } from "@/lib/geocode";
 import { useStore } from "@/store/useStore";
+import { FleetGames } from "./FleetGames";
 
 /** Captures map clicks for the A->B route planner (must live inside MapContainer). */
 function PlanPicker({ active, onPick }: { active: boolean; onPick: (p: LatLng) => void }) {
@@ -200,6 +201,7 @@ export function FleetMap() {
   const [fitTarget, setFitTarget] = useState<LatLng[] | null>(null);
   const [driving, setDriving] = useState(false);
   const [tripCar, setTripCar] = useState<{ pos: LatLng; heading: number; t: number } | null>(null);
+  const [gameHud, setGameHud] = useState<HTMLDivElement | null>(null);
 
   const setStop = (i: number, p: Place) => setStops((s) => s.map((v, idx) => (idx === i ? p : v)));
   const addStop = () => setStops((s) => (s.length >= 6 ? s : [...s, null]));
@@ -422,6 +424,8 @@ export function FleetMap() {
                   </Popup>
                 </Marker>
               ))}
+              {/* Arcade games (dispatch / route-rush / intercept) on the live map. */}
+              <FleetGames hud={gameHud} />
             </MapContainer>
 
             {/* Trip planner overlay (right): geocode any address, route A→B→C→D */}
@@ -513,6 +517,9 @@ export function FleetMap() {
                 </div>
               )}
             </div>
+
+            {/* Arcade HUD container (FleetGames portals its panel here). */}
+            <div ref={setGameHud} className="absolute bottom-4 left-4 z-[1000]" />
 
             {/* Controls overlay */}
             <div className="glass-raised absolute left-4 top-4 z-[1000] flex w-60 flex-col gap-3 p-4">
