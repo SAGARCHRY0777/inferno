@@ -6,9 +6,11 @@ REM Safe to run anytime; it silently ignores whatever isn't running.
 REM ===========================================================================
 echo [Inferno] Stopping all Inferno windows and services...
 
-REM 1) Close the consoles run-all opened (all titled "Inferno ...") together with
-REM    their child processes (redis-server / python / node) via the tree kill /T.
-taskkill /F /T /FI "WINDOWTITLE eq Inferno*" >nul 2>&1
+REM 1) Close the consoles run-all opened (cmd.exe windows titled "Inferno ...")
+REM    plus their child processes (redis-server / python / node) via /T.
+REM    The IMAGENAME filter restricts to cmd.exe so a BROWSER tab whose title also
+REM    starts with "Inferno" (e.g. the app page) is NEVER touched.
+taskkill /F /T /FI "IMAGENAME eq cmd.exe" /FI "WINDOWTITLE eq Inferno*" >nul 2>&1
 
 REM 2) Fallback: free the known ports in case a window lost its "Inferno" title
 REM    (e.g. a tool renamed it). Only LISTENING server sockets are matched.
