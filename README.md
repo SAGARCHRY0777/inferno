@@ -116,6 +116,9 @@ The Redis Streams implementation lives behind them, so the transport is swappabl
 
 > Prereqs: [Miniconda](https://docs.conda.io/en/latest/miniconda.html) and
 > [Node 20+](https://nodejs.org). No admin rights required.
+>
+> **Fresh PC?** One command installs everything — `scripts\setup.bat` (then
+> `scripts\run-all.bat`). Full guide: **[SETUP.md](SETUP.md)**.
 
 ```bat
 :: 1. Install the Python stack into a conda env named "test" (Python 3.10).
