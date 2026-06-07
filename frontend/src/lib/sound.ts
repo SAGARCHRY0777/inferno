@@ -72,4 +72,30 @@ export const sound = {
     note(220, 0, 0.18, 0.05, "sawtooth");
     note(164.81, 0.1, 0.22, 0.04, "sawtooth");
   },
+  // --- arcade game cues -------------------------------------------------- //
+  blip() {
+    if (muted) return;
+    note(440, 0, 0.05, 0.03, "square");
+  },
+  caught() {
+    if (muted) return;
+    note(659.25, 0, 0.05, 0.04, "triangle");
+    note(987.77, 0.05, 0.09, 0.035, "triangle");
+  },
+  deliver() {
+    if (muted) return;
+    note(587.33, 0, 0.08, 0.04, "sine");
+    note(880, 0.07, 0.14, 0.035, "sine");
+  },
+  levelup() {
+    if (muted) return;
+    note(523.25, 0, 0.08, 0.04, "sine");
+    note(659.25, 0.08, 0.08, 0.04, "sine");
+    note(987.77, 0.16, 0.18, 0.04, "sine");
+  },
+  gameover() {
+    if (muted) return;
+    note(392, 0, 0.18, 0.05, "sawtooth");
+    note(261.63, 0.14, 0.3, 0.045, "sawtooth");
+  },
 };

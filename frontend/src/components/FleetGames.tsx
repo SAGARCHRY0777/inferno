@@ -6,6 +6,7 @@ import { Circle, Marker, Polyline, useMap, useMapEvents } from "react-leaflet";
 import { bearing, formatKm, type LatLng, routeThrough } from "@/lib/fleet";
 import { distM, pathDist, randomPointNear, tspBest } from "@/lib/games";
 import { type Place, searchPlaces } from "@/lib/geocode";
+import { sound } from "@/lib/sound";
 
 type Mode = "dispatch" | "tsp" | "intercept";
 
@@ -14,6 +15,25 @@ const CATCH_M = 170;
 const PLAYER = "#3DDC97"; // green = you
 const ENEMY = "#FF4D6D"; // red = target
 const GOLD = "#FFB020";
+
+// high scores (per game) in localStorage
+const hiKey = (m: string) => `inferno.hi.${m}`;
+const getHi = (m: string): number => {
+  try {
+    return Number(localStorage.getItem(hiKey(m))) || 0;
+  } catch {
+    return 0;
+  }
+};
+const saveHi = (m: string, v: number): number => {
+  const best = Math.max(getHi(m), v);
+  try {
+    localStorage.setItem(hiKey(m), String(best));
+  } catch {
+    /* ignore */
+  }
+  return best;
+};
 
 // --- icons ----------------------------------------------------------------- //
 function pin(color: string, label = "", size = 22): L.DivIcon {
@@ -37,7 +57,7 @@ function car(heading: number, color: string): L.DivIcon {
   });
 }
 
-// --- a road-following driver (player vehicle) ------------------------------ //
+// --- a road-following driver ----------------------------------------------- //
 interface Driver {
   route: LatLng[];
   t: number;
@@ -45,16 +65,19 @@ interface Driver {
   pos: LatLng;
   heading: number;
 }
-function makeDriver(route: LatLng[]): Driver {
+function makeDriver(route: LatLng[], speedMul = 1): Driver {
   const meters = pathDist(route);
-  const durMs = Math.min(12000, Math.max(2200, meters / 0.5));
+  const durMs = Math.min(16000, Math.max(2200, meters / 0.5));
   return {
     route,
     t: 0,
-    speed: TICK / durMs,
+    speed: (TICK / durMs) * speedMul,
     pos: route[0],
     heading: route.length > 1 ? bearing(route[0], route[1]) : 0,
   };
+}
+function still(pos: LatLng): Driver {
+  return { route: [pos, pos], t: 1, speed: 0, pos, heading: 0 };
 }
 function advance(d: Driver): Driver {
   const t = Math.min(1, d.t + d.speed);
@@ -71,44 +94,18 @@ function advance(d: Driver): Driver {
   };
 }
 
-// --- a straight-line mover (chase targets — no OSRM, so no rate-limit spam) - //
-interface Mover {
-  pos: LatLng;
-  dest: LatLng;
-  heading: number;
-}
-function newMover(center: LatLng): Mover {
-  const pos = randomPointNear(center, 3);
-  const dest = randomPointNear(center, 3);
-  return { pos, dest, heading: bearing(pos, dest) };
-}
-function stepMover(m: Mover, center: LatLng, mps: number): Mover {
-  const d = distM(m.pos, m.dest);
-  if (d < 40) {
-    const dest = randomPointNear(center, 3);
-    return { ...m, dest, heading: bearing(m.pos, dest) };
-  }
-  const step = (mps * TICK) / 1000;
-  const f = Math.min(1, step / d);
-  return {
-    pos: [m.pos[0] + (m.dest[0] - m.pos[0]) * f, m.pos[1] + (m.dest[1] - m.pos[1]) * f],
-    dest: m.dest,
-    heading: bearing(m.pos, m.dest),
-  };
-}
-
 async function geom(points: LatLng[]): Promise<LatLng[]> {
   const plan = await routeThrough(points);
   return plan && plan.geometry.length > 1 ? plan.geometry : points;
 }
 
-// --- intercept difficulty: 20 escalating levels --------------------------- //
+// intercept: 20 escalating levels
 function levelCfg(level: number) {
   return {
-    nTargets: Math.min(1 + Math.floor((level - 1) / 4), 5), // 1 → 5 simultaneous
-    speedMps: 150 + (level - 1) * 22, // faster every level
-    timeS: Math.max(18, 40 - level), // tighter every level
-    goal: level + 1, // catches needed to clear
+    nTargets: Math.min(1 + Math.floor((level - 1) / 4), 5),
+    speedMul: 1 + (level - 1) * 0.13,
+    timeS: Math.max(18, 40 - level),
+    goal: level + 1,
   };
 }
 
@@ -117,6 +114,10 @@ interface Order {
   pickup: LatLng;
   dropoff: LatLng;
   reward: number;
+}
+interface Tgt {
+  drv: Driver;
+  regen: boolean;
 }
 
 export function FleetGames({
@@ -131,10 +132,17 @@ export function FleetGames({
   const [running, setRunning] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [score, setScore] = useState(0);
+  const [best, setBest] = useState(0);
+  const scoreRef = useRef(0);
 
   useEffect(() => onActive?.(mode !== null), [mode, onActive]);
 
-  // player vehicle (dispatch + intercept) — driven via refs to avoid setState races
+  const bumpScore = (n: number) => {
+    scoreRef.current += n;
+    setScore(scoreRef.current);
+  };
+
+  // player vehicle (dispatch + intercept), driven via refs (no setState races)
   const [player, setPlayer] = useState<Driver | null>(null);
   const playerRef = useRef<Driver | null>(null);
   const arriveRef = useRef<(() => void) | null>(null);
@@ -148,16 +156,16 @@ export function FleetGames({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const orderId = useRef(0);
-  const spawnAcc = useRef(0);
   const timeAcc = useRef(0);
 
   // intercept
-  const [targets, setTargets] = useState<Mover[]>([]);
-  const targetsRef = useRef<Mover[]>([]);
-  const setTg = (m: Mover[]) => {
+  const [targets, setTargets] = useState<Tgt[]>([]);
+  const targetsRef = useRef<Tgt[]>([]);
+  const setTg = (m: Tgt[]) => {
     targetsRef.current = m;
     setTargets(m);
   };
+  const speedMulRef = useRef(1);
   const [level, setLevel] = useState(1);
   const [caught, setCaught] = useState(0);
   const [banner, setBanner] = useState("");
@@ -170,7 +178,7 @@ export function FleetGames({
   const [picked, setPicked] = useState<number[]>([]);
   const [tsp, setTsp] = useState<{ your: number; best: number; pct: number } | null>(null);
 
-  // location search (choose where to play)
+  // location search
   const [q, setQ] = useState("");
   const [places, setPlaces] = useState<Place[]>([]);
 
@@ -195,27 +203,44 @@ export function FleetGames({
     setBanner("");
   };
 
-  // --- intercept level control -------------------------------------------- //
+  // road route for a target (reads its current position so there's no jump)
+  const regenTgt = (i: number) => {
+    const c = centerRef.current;
+    const mul = speedMulRef.current;
+    const from = targetsRef.current[i]?.drv.pos ?? c;
+    void geom([from, randomPointNear(c, 3), randomPointNear(c, 3)]).then((g) => {
+      const arr = targetsRef.current.slice();
+      if (arr[i]) {
+        arr[i] = { drv: makeDriver(g, mul), regen: false };
+        setTg(arr);
+      }
+    });
+  };
+
   const startLevel = (lvl: number) => {
+    const cfg = levelCfg(lvl);
     levelRef.current = lvl;
     caughtRef.current = 0;
+    speedMulRef.current = cfg.speedMul;
     setLevel(lvl);
     setCaught(0);
-    const cfg = levelCfg(lvl);
     setTimeLeft(cfg.timeS);
     timeAcc.current = 0;
-    setTg(Array.from({ length: cfg.nTargets }, () => newMover(centerRef.current)));
+    const seed = Array.from({ length: cfg.nTargets }, () => still(randomPointNear(centerRef.current, 3)));
+    setTg(seed.map((drv) => ({ drv, regen: true })));
+    seed.forEach((_, i) => regenTgt(i)); // upgrade each to a real road route
   };
 
   const startMode = (m: Mode) => {
     reset();
     setMode(m);
+    scoreRef.current = 0;
     setScore(0);
+    setBest(getHi(m));
     centerRef.current = center();
     if (m === "dispatch") {
       setTimeLeft(60);
       timeAcc.current = 0;
-      spawnAcc.current = 0;
       setRunning(true);
     } else if (m === "intercept") {
       setPv(makeDriver([center(), center()]));
@@ -229,9 +254,10 @@ export function FleetGames({
     }
   };
 
-  // --- dispatch: go to pickup → prepare → deliver ------------------------- //
+  // dispatch
   const dispatch = async (o: Order) => {
     if (busy || !running) return;
+    sound.blip();
     setBusy(true);
     setStatus("🚗 heading to pickup");
     const from = playerRef.current?.pos ?? center();
@@ -242,7 +268,8 @@ export function FleetGames({
         setStatus("📦 delivering");
         setPv(makeDriver(await geom([o.pickup, o.dropoff])));
         arriveRef.current = () => {
-          setScore((s) => s + o.reward);
+          bumpScore(o.reward);
+          sound.deliver();
           setOrders((os) => os.filter((x) => x.id !== o.id));
           setStatus("✅ delivered!");
           setBusy(false);
@@ -252,26 +279,28 @@ export function FleetGames({
     };
   };
 
-  // --- intercept: click the map to send your car -------------------------- //
+  // intercept: click to send your car
   useMapEvents({
     async click(e) {
       if (mode !== "intercept" || !running || !playerRef.current) return;
+      sound.blip();
       setPv(makeDriver(await geom([playerRef.current.pos, [e.latlng.lat, e.latlng.lng]])));
       arriveRef.current = null;
     },
   });
 
-  // --- the single game loop (all logic in the interval body, not in updaters) //
+  // main game loop
   useEffect(() => {
     if (!mode || !running || mode === "tsp") return;
     const id = window.setInterval(() => {
-      // 1s timer
       timeAcc.current += TICK;
       if (timeAcc.current >= 1000) {
         timeAcc.current -= 1000;
         setTimeLeft((s) => {
           if (s <= 1) {
             setRunning(false);
+            setBest(saveHi(mode, scoreRef.current));
+            sound.gameover();
             if (mode === "intercept") setBanner(`Game over — reached level ${levelRef.current}`);
             return 0;
           }
@@ -279,7 +308,7 @@ export function FleetGames({
         });
       }
 
-      // advance the player vehicle (and fire arrival callbacks safely)
+      // player
       const p = playerRef.current;
       if (p) {
         if (p.t >= 1) {
@@ -307,34 +336,42 @@ export function FleetGames({
       }
 
       if (mode === "intercept") {
-        const cfg = levelCfg(levelRef.current);
         const c = centerRef.current;
         const pos = playerRef.current?.pos;
-        let nts = targetsRef.current.map((m) => stepMover(m, c, cfg.speedMps));
+        const toRegen: number[] = [];
         let got = 0;
-        if (pos) {
-          nts = nts.map((m) => {
-            if (distM(pos, m.pos) < CATCH_M) {
-              got++;
-              return newMover(c);
-            }
-            return m;
-          });
-        }
-        setTg(nts);
+        const next = targetsRef.current.map((tg, i) => {
+          if (pos && distM(pos, tg.drv.pos) < CATCH_M) {
+            got++;
+            toRegen.push(i);
+            return { drv: still(randomPointNear(c, 4)), regen: true }; // respawn far
+          }
+          if (tg.drv.t >= 1) {
+            if (!tg.regen) toRegen.push(i);
+            return { ...tg, regen: true };
+          }
+          return { drv: advance(tg.drv), regen: tg.regen };
+        });
+        targetsRef.current = next;
+        setTargets(next);
+        toRegen.forEach((i) => regenTgt(i));
+
         if (got > 0) {
+          sound.caught();
+          bumpScore(got);
           caughtRef.current += got;
           setCaught(caughtRef.current);
-          setScore((s) => s + got);
-          if (caughtRef.current >= cfg.goal) {
-            const next = levelRef.current + 1;
-            if (next > 20) {
+          if (caughtRef.current >= levelCfg(levelRef.current).goal) {
+            const nextLvl = levelRef.current + 1;
+            if (nextLvl > 20) {
               setRunning(false);
+              setBest(saveHi("intercept", scoreRef.current));
               setBanner("🏆 You cleared all 20 levels!");
             } else {
-              setBanner(`Level ${next}! faster + more targets`);
+              sound.levelup();
+              setBanner(`Level ${nextLvl}! faster + more targets`);
               window.setTimeout(() => setBanner(""), 1600);
-              startLevel(next);
+              startLevel(nextLvl);
             }
           }
         }
@@ -343,28 +380,30 @@ export function FleetGames({
     return () => window.clearInterval(id);
   }, [mode, running]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- tsp ----------------------------------------------------------------- //
+  // tsp
   const pickStop = (i: number) => {
     if (mode !== "tsp" || tsp) return;
-    setPicked((p) => (p.includes(i) ? p : [...p, i]));
+    sound.blip();
+    setPicked((pp) => (pp.includes(i) ? pp : [...pp, i]));
   };
   const submitTsp = () => {
     if (picked.length !== stops.length) return;
     const your = pathDist(picked.map((i) => stops[i]));
-    const best = tspBest(stops).dist;
-    setTsp({ your, best, pct: Math.round((best / your) * 100) });
+    const bestDist = tspBest(stops).dist;
+    const pct = Math.round((bestDist / your) * 100);
+    setTsp({ your, best: bestDist, pct });
+    setBest(saveHi("tsp", pct));
+    sound.success();
   };
 
-  // --- location search ----------------------------------------------------- //
+  // location search
   useEffect(() => {
     if (q.trim().length < 3) {
       setPlaces([]);
       return;
     }
     const ctrl = new AbortController();
-    const t = window.setTimeout(() => {
-      void searchPlaces(q, ctrl.signal).then(setPlaces);
-    }, 300);
+    const t = window.setTimeout(() => void searchPlaces(q, ctrl.signal).then(setPlaces), 300);
     return () => {
       ctrl.abort();
       window.clearTimeout(t);
@@ -377,8 +416,6 @@ export function FleetGames({
   };
 
   // ======================================================================== //
-  // map layers
-  // ======================================================================== //
   const layers = (
     <>
       {mode === "dispatch" &&
@@ -386,10 +423,7 @@ export function FleetGames({
           <Fragment key={o.id}>
             <Marker position={o.pickup} icon={pin(GOLD, "📦")} />
             <Marker position={o.dropoff} icon={pin(PLAYER, "🏁")} />
-            <Polyline
-              positions={[o.pickup, o.dropoff]}
-              pathOptions={{ color: GOLD, weight: 1, opacity: 0.4, dashArray: "4 6" }}
-            />
+            <Polyline positions={[o.pickup, o.dropoff]} pathOptions={{ color: GOLD, weight: 1, opacity: 0.4, dashArray: "4 6" }} />
           </Fragment>
         ))}
 
@@ -398,11 +432,7 @@ export function FleetGames({
           <Marker
             key={`s-${i}`}
             position={s}
-            icon={pin(
-              i === 0 ? "#00E5FF" : picked.includes(i) ? PLAYER : ENEMY,
-              i === 0 ? "S" : picked.includes(i) ? String(picked.indexOf(i)) : "",
-              26,
-            )}
+            icon={pin(i === 0 ? "#00E5FF" : picked.includes(i) ? PLAYER : ENEMY, i === 0 ? "S" : picked.includes(i) ? String(picked.indexOf(i)) : "", 26)}
             eventHandlers={{ click: () => pickStop(i) }}
           />
         ))}
@@ -411,10 +441,10 @@ export function FleetGames({
       )}
 
       {mode === "intercept" &&
-        targets.map((m, i) => (
+        targets.map((tg, i) => (
           <Fragment key={`t-${i}`}>
-            <Circle center={m.pos} radius={CATCH_M} pathOptions={{ color: ENEMY, weight: 1, opacity: 0.45 }} />
-            <Marker position={m.pos} icon={car(m.heading, ENEMY)} />
+            <Circle center={tg.drv.pos} radius={CATCH_M} pathOptions={{ color: ENEMY, weight: 1, opacity: 0.45 }} />
+            <Marker position={tg.drv.pos} icon={car(tg.drv.heading, ENEMY)} />
           </Fragment>
         ))}
 
@@ -425,9 +455,6 @@ export function FleetGames({
     </>
   );
 
-  // ======================================================================== //
-  // HUD
-  // ======================================================================== //
   const hudUi = (
     <div className="glass-raised flex w-64 flex-col gap-2 p-4">
       <div className="flex items-center justify-between">
@@ -447,7 +474,6 @@ export function FleetGames({
 
       {!mode && (
         <div className="flex flex-col gap-1.5">
-          {/* choose where to play */}
           <div className="relative">
             <input
               value={q}
@@ -458,21 +484,16 @@ export function FleetGames({
             {places.length > 0 && (
               <ul className="absolute z-[1100] mt-1 max-h-44 w-full overflow-auto rounded-lg border border-hairline bg-base shadow-xl">
                 {places.map((p, i) => (
-                  <li
-                    key={`${p.lat}-${i}`}
-                    onClick={() => flyTo(p)}
-                    className="cursor-pointer px-2.5 py-1.5 text-[11px] text-ink-muted hover:bg-surface-hover"
-                  >
+                  <li key={`${p.lat}-${i}`} onClick={() => flyTo(p)} className="cursor-pointer px-2.5 py-1.5 text-[11px] text-ink-muted hover:bg-surface-hover">
                     {p.label}
                   </li>
                 ))}
               </ul>
             )}
           </div>
-          <p className="text-[10px] text-ink-faint">Pick a place, then a game — the fleet hides automatically.</p>
           <button onClick={() => startMode("dispatch")} className={BTN}>🚕 Dispatch — deliver before the clock</button>
-          <button onClick={() => startMode("tsp")} className={BTN}>🧭 Route Rush — find the shortest loop</button>
-          <button onClick={() => startMode("intercept")} className={BTN}>🎯 Intercept — 20-level chase</button>
+          <button onClick={() => startMode("tsp")} className={BTN}>🧭 Route Rush — shortest loop</button>
+          <button onClick={() => startMode("intercept")} className={BTN}>🎯 Intercept — 20-level road chase</button>
         </div>
       )}
 
@@ -481,6 +502,7 @@ export function FleetGames({
       {mode && mode !== "tsp" && (
         <div className="flex items-center justify-between text-xs">
           <span className="tnum text-accent">score {score}</span>
+          <span className="tnum text-ink-faint">best {best}</span>
           <span className={`tnum ${timeLeft <= 10 ? "text-danger" : "text-ink-muted"}`}>⏱ {timeLeft}s</span>
         </div>
       )}
@@ -494,15 +516,10 @@ export function FleetGames({
 
       {mode === "dispatch" && (
         <div className="flex flex-col gap-1.5">
-          {!running && <button onClick={() => startMode("dispatch")} className={BTN}>↻ Play again — final score {score}</button>}
+          {!running && <button onClick={() => startMode("dispatch")} className={BTN}>↻ Play again — final {score}</button>}
           {running && orders.length === 0 && <p className="text-[11px] text-ink-faint">Waiting for orders…</p>}
           {orders.map((o) => (
-            <button
-              key={o.id}
-              onClick={() => void dispatch(o)}
-              disabled={busy}
-              className="flex items-center justify-between rounded-lg border border-hairline bg-surface/50 px-2 py-1.5 text-[11px] hover:bg-surface-hover disabled:opacity-40"
-            >
+            <button key={o.id} onClick={() => void dispatch(o)} disabled={busy} className="flex items-center justify-between rounded-lg border border-hairline bg-surface/50 px-2 py-1.5 text-[11px] hover:bg-surface-hover disabled:opacity-40">
               <span>📦 {formatKm(distM(o.pickup, o.dropoff))}</span>
               <span className="tnum text-accent">+{o.reward}</span>
             </button>
@@ -511,32 +528,26 @@ export function FleetGames({
         </div>
       )}
 
-      {mode === "intercept" && (
-        <p className="text-[11px] text-ink-faint">
-          {running ? "Click the map to chase the red cars into your ring." : "Game over."}
-          {!running && (
-            <button onClick={() => startMode("intercept")} className={`${BTN} mt-1 w-full text-center`}>↻ Restart at level 1</button>
-          )}
-        </p>
+      {mode === "intercept" && !running && (
+        <button onClick={() => startMode("intercept")} className={`${BTN} text-center`}>↻ Restart at level 1</button>
+      )}
+      {mode === "intercept" && running && (
+        <p className="text-[11px] text-ink-faint">Click the map to chase the red cars into your ring.</p>
       )}
 
       {mode === "tsp" && (
         <div className="flex flex-col gap-1.5">
           {!tsp ? (
             <>
-              <p className="text-[11px] text-ink-faint">
-                From <b>S</b>, click the red stops in the order you'd visit them — shortest loop wins.
-              </p>
-              <button onClick={submitTsp} disabled={picked.length !== stops.length} className={`${BTN} disabled:opacity-40`}>
-                Submit ({picked.length}/{stops.length})
-              </button>
+              <p className="text-[11px] text-ink-faint">From <b>S</b>, click the red stops in your visiting order — shortest loop wins.</p>
+              <button onClick={submitTsp} disabled={picked.length !== stops.length} className={`${BTN} disabled:opacity-40`}>Submit ({picked.length}/{stops.length})</button>
             </>
           ) : (
             <>
               <div className="rounded-lg border border-hairline bg-surface/40 p-2 text-[11px]">
                 <div className="flex justify-between"><span>Your route</span><span className="tnum">{formatKm(tsp.your)}</span></div>
                 <div className="flex justify-between"><span>Best possible</span><span className="tnum text-accent">{formatKm(tsp.best)}</span></div>
-                <div className="mt-1 text-center text-sm font-bold text-accent">{tsp.pct}% efficient</div>
+                <div className="mt-1 text-center text-sm font-bold text-accent">{tsp.pct}% efficient · best {best}%</div>
               </div>
               <button onClick={() => startMode("tsp")} className={BTN}>↻ New puzzle</button>
             </>
