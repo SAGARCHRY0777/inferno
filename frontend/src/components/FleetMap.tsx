@@ -295,11 +295,19 @@ export function FleetMap() {
             <MapContainer
               center={SF_CENTER}
               zoom={13}
+              minZoom={2}
+              maxBounds={[
+                [-85, -180],
+                [85, 180],
+              ]}
+              maxBoundsViscosity={1}
+              worldCopyJump={false}
               className="h-full w-full"
               style={{ background: "#0A0B0F" }}
               zoomControl={false}
             >
               <TileLayer
+                noWrap
                 url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                 attribution='&copy; OpenStreetMap &copy; CARTO'
               />
