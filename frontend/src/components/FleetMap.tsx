@@ -29,8 +29,10 @@ import {
   spawnVehicle,
   stepVehicle,
 } from "@/lib/fleet";
+import { type Car, carDisplay } from "@/lib/cars";
 import { type Place, searchPlaces } from "@/lib/geocode";
 import { useStore } from "@/store/useStore";
+import { CarPicker } from "./CarPicker";
 import { FleetGames } from "./FleetGames";
 
 /** Captures map clicks for the A->B route planner (must live inside MapContainer). */
@@ -205,6 +207,11 @@ export function FleetMap() {
   const [gameActive, setGameActive] = useState(false);
   const [hideFleet, setHideFleet] = useState(false);
   const fleetHidden = gameActive || hideFleet;
+  const [carPickerOpen, setCarPickerOpen] = useState(false);
+  const [activeCar, setActiveCar] = useState<Car | null>(null);
+
+  const addVehicle = (car?: Car) =>
+    setVehicles((vs) => [...vs, spawnVehicle(undefined, undefined, car)].slice(-MAX_VEHICLES));
 
   const setStop = (i: number, p: Place) => setStops((s) => s.map((v, idx) => (idx === i ? p : v)));
   const addStop = () => setStops((s) => (s.length >= 6 ? s : [...s, null]));
@@ -421,11 +428,11 @@ export function FleetMap() {
                   <Marker key={v.id} position={v.pos} icon={vehicleIcon(v)}>
                     <Popup>
                       <div className="text-xs">
-                        <b>{v.name}</b> · {v.label}
+                        <b>{carDisplay(v.car)}</b>
                         <br />
-                        {v.status} · {v.speedKph.toFixed(0)} km/h
+                        {v.name} · {v.car.type} · {v.status}
                         <br />
-                        battery {v.battery.toFixed(0)}%
+                        {v.speedKph.toFixed(0)} km/h · battery {v.battery.toFixed(0)}%
                       </div>
                     </Popup>
                   </Marker>
@@ -527,6 +534,19 @@ export function FleetMap() {
             {/* Arcade HUD container (FleetGames portals its panel here). */}
             <div ref={setGameHud} className="absolute bottom-4 left-4 z-[1000]" />
 
+            {/* Real-car picker (filter by brand / country / type). */}
+            {carPickerOpen && (
+              <div className="absolute left-[17rem] top-4 z-[1001]">
+                <CarPicker
+                  onPick={(c) => {
+                    setActiveCar(c);
+                    addVehicle(c);
+                  }}
+                  onClose={() => setCarPickerOpen(false)}
+                />
+              </div>
+            )}
+
             {/* Controls overlay */}
             <div className="glass-raised absolute left-4 top-4 z-[1000] flex w-60 flex-col gap-3 p-4">
               <div className="flex items-center justify-between">
@@ -550,7 +570,7 @@ export function FleetMap() {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => setVehicles((vs) => [...vs, spawnVehicle()].slice(-MAX_VEHICLES))}
+                  onClick={() => addVehicle(activeCar ?? undefined)}
                   className="focusable flex-1 rounded-lg border border-hairline bg-surface/50 py-1.5 text-xs hover:bg-surface-hover"
                 >
                   + Add
@@ -563,12 +583,25 @@ export function FleetMap() {
                 </button>
               </div>
 
-              <button
-                onClick={() => setHideFleet((h) => !h)}
-                className="focusable rounded-lg border border-hairline bg-surface/50 py-1.5 text-xs hover:bg-surface-hover"
-              >
-                {hideFleet ? "👁 Show fleet" : "🙈 Hide fleet"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setHideFleet((h) => !h)}
+                  className="focusable flex-1 rounded-lg border border-hairline bg-surface/50 py-1.5 text-xs hover:bg-surface-hover"
+                >
+                  {hideFleet ? "👁 Show" : "🙈 Hide"}
+                </button>
+                <button
+                  onClick={() => setCarPickerOpen((o) => !o)}
+                  className="focusable flex-1 rounded-lg border border-hairline bg-surface/50 py-1.5 text-xs hover:bg-surface-hover"
+                >
+                  🚘 Cars
+                </button>
+              </div>
+              {activeCar && (
+                <p className="truncate text-center text-[10px] text-ink-faint">
+                  + Add spawns: {carDisplay(activeCar)}
+                </p>
+              )}
 
               <button
                 onClick={dispatchFromYolo}

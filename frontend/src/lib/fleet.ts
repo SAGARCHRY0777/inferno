@@ -7,6 +7,8 @@
  * needed -- it's a self-contained visualization driven by requestAnimationFrame.
  */
 
+import { type Car, randomCar } from "./cars";
+
 export type LatLng = [number, number];
 
 export interface Vehicle {
@@ -22,6 +24,7 @@ export interface Vehicle {
   status: "en route" | "charging";
   trail: LatLng[];
   label: string; // car / truck / bus / robotaxi
+  car: Car; // a real-world car model (brand / model / country / type)
 }
 
 export const SF_CENTER: LatLng = [37.7749, -122.4194];
@@ -90,7 +93,7 @@ function lerp(a: LatLng, b: LatLng, t: number): LatLng {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 }
 
-export function spawnVehicle(label?: string, routeId?: number): Vehicle {
+export function spawnVehicle(label?: string, routeId?: number, car?: Car): Vehicle {
   _counter += 1;
   const rid = routeId ?? _counter % ROUTES.length;
   const route = ROUTES[rid];
@@ -109,6 +112,7 @@ export function spawnVehicle(label?: string, routeId?: number): Vehicle {
     status: "en route",
     trail: [pos],
     label: label ?? VEHICLE_TYPES[_counter % VEHICLE_TYPES.length],
+    car: car ?? randomCar(),
   };
 }
 
