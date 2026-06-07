@@ -2,7 +2,7 @@ import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MapContainer,
   Marker,
@@ -18,22 +18,17 @@ import {
   formatEta,
   formatKm,
   type LatLng,
-  ROUTE_GEOMETRY,
-  ROUTE_GEOMETRY_SOURCE,
   type RoutePlan,
   routeThrough,
   SF_CENTER,
-  VEHICLE_CLASSES,
-  type Vehicle,
   planRoute,
-  spawnVehicle,
-  stepVehicle,
 } from "@/lib/fleet";
 import { type Car, carDisplay } from "@/lib/cars";
 import { type Place, searchPlaces } from "@/lib/geocode";
 import { useStore } from "@/store/useStore";
 import { CarPicker } from "./CarPicker";
 import { FleetGames } from "./FleetGames";
+import { type WorldApi, WorldFleet } from "./WorldFleet";
 
 /** Captures map clicks for the A->B route planner (must live inside MapContainer). */
 function PlanPicker({ active, onPick }: { active: boolean; onPick: (p: LatLng) => void }) {
@@ -54,24 +49,7 @@ function pinIcon(color: string): L.DivIcon {
   });
 }
 
-const TICK_MS = 120;
-const TIME_SCALE = 26; // accelerate so motion is visible at city scale
-const MAX_VEHICLES = 60; // cap so "Add"/"Dispatch" can't grow state unboundedly
 const TRAIL_COLOR = "#00E5FF";
-const CHARGE_COLOR = "#FFB020";
-
-function vehicleIcon(v: Vehicle): L.DivIcon {
-  const color = v.status === "charging" ? CHARGE_COLOR : TRAIL_COLOR;
-  return L.divIcon({
-    className: "av-marker", // CSS transitions its transform so it glides between ticks
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
-    html: `<div style="transform:rotate(${v.heading}deg);filter:drop-shadow(0 0 4px ${color})">
-      <svg width="16" height="16" viewBox="0 0 16 16">
-        <path d="M8 1 L13 14 L8 11 L3 14 Z" fill="${color}" stroke="#0A0B0F" stroke-width="0.6"/>
-      </svg></div>`,
-  });
-}
 
 const STOP_COLORS = ["#3DDC97", "#FF4D6D", "#FFB020", "#00E5FF", "#B388FF", "#FF8A65"];
 
@@ -183,12 +161,9 @@ function AddressInput({
 export function FleetMap() {
   const open = useStore((s) => s.fleetOpen);
   const setOpen = useStore((s) => s.setFleetOpen);
-  const jobs = useStore((s) => s.jobs);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [running, setRunning] = useState(true);
-  const [speed, setSpeed] = useState(1);
-  const speedRef = useRef(1);
-  speedRef.current = speed;
+  const worldApi = useRef<WorldApi | null>(null);
+  const [worldCount, setWorldCount] = useState({ visible: 0, total: 0 });
 
   // A -> B route planner state.
   const [planMode, setPlanMode] = useState(false);
@@ -210,8 +185,7 @@ export function FleetMap() {
   const [carPickerOpen, setCarPickerOpen] = useState(false);
   const [activeCar, setActiveCar] = useState<Car | null>(null);
 
-  const addVehicle = (car?: Car) =>
-    setVehicles((vs) => [...vs, spawnVehicle(undefined, undefined, car)].slice(-MAX_VEHICLES));
+  const addVehicle = (car?: Car) => worldApi.current?.add(car);
 
   const setStop = (i: number, p: Place) => setStops((s) => s.map((v, idx) => (idx === i ? p : v)));
   const addStop = () => setStops((s) => (s.length >= 6 ? s : [...s, null]));
@@ -284,45 +258,11 @@ export function FleetMap() {
     }
   };
 
-  // Seed a starting fleet the first time the view opens.
-  useEffect(() => {
-    if (open && vehicles.length === 0) {
-      setVehicles(Array.from({ length: 8 }, () => spawnVehicle()));
-    }
-  }, [open, vehicles.length]);
-
-  // Simulation loop (paused while an arcade game is active, to declutter the map).
-  useEffect(() => {
-    if (!open || !running || fleetHidden) return;
-    const id = window.setInterval(() => {
-      const dt = (TICK_MS / 1000) * TIME_SCALE * speedRef.current;
-      setVehicles((vs) => vs.map((v) => stepVehicle(v, dt)));
-    }, TICK_MS);
-    return () => window.clearInterval(id);
-  }, [open, running, fleetHidden]);
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [setOpen]);
-
-  // How many vehicles the latest YOLO detection found (cars/trucks/buses…).
-  const detectedVehicles = useMemo(() => {
-    const yolo = jobs.find((j) => j.modelName === "yolo-detect" && j.result);
-    if (!yolo?.result) return [] as string[];
-    return yolo.result.predictions
-      .filter((p) => VEHICLE_CLASSES.has(p.label))
-      .map((p) => p.label);
-  }, [jobs]);
-
-  const dispatchFromYolo = () => {
-    const labels = detectedVehicles.slice(0, 12);
-    if (labels.length === 0) return;
-    setVehicles((vs) => [...vs, ...labels.map((l) => spawnVehicle(l))].slice(-MAX_VEHICLES));
-  };
-
-  const charging = vehicles.filter((v) => v.status === "charging").length;
 
   return (
     <AnimatePresence>
@@ -338,9 +278,8 @@ export function FleetMap() {
             <div>
               <h2 className="text-sm font-semibold">Fleet Command · Autonomous Vehicles</h2>
               <p className="text-[11px] text-ink-faint">
-                live path tracing ·{" "}
-                {ROUTE_GEOMETRY_SOURCE === "osrm" ? "real road geometry (OSRM)" : "straight routes"} ·
-                OpenStreetMap · worldwide trip planner
+                worldwide fleet · {worldCount.visible} in view / {worldCount.total} total ·
+                OpenStreetMap · trip planner + arcade
               </p>
             </div>
             <button
@@ -365,15 +304,13 @@ export function FleetMap() {
                 attribution='&copy; OpenStreetMap &copy; CARTO'
               />
               <PlanPicker active={planMode} onPick={onPick} />
-              {/* Real-road route outlines (hidden during a game to declutter). */}
-              {!fleetHidden &&
-                ROUTE_GEOMETRY.map((r, i) => (
-                  <Polyline
-                    key={`route-${i}-${r.length}`}
-                    positions={r}
-                    pathOptions={{ color: "#ffffff", weight: 1, opacity: 0.14 }}
-                  />
-                ))}
+              {/* Worldwide fleet — only the in-view vehicles are stepped + drawn. */}
+              <WorldFleet
+                hidden={fleetHidden}
+                paused={!running}
+                api={worldApi}
+                onCounts={(visible, total) => setWorldCount({ visible, total })}
+              />
               {/* A->B planned route + endpoint pins. */}
               {planned && (
                 <Polyline key={`plan-${planned.length}`} positions={planned} pathOptions={{ color: TRAIL_COLOR, weight: 3, opacity: 0.9 }} />
@@ -411,32 +348,6 @@ export function FleetMap() {
                 />
               )}
               {tripCar && <Marker position={tripCar.pos} icon={tripCarIcon(tripCar.heading)} />}
-              {!fleetHidden &&
-                vehicles.map((v) => (
-                  <Polyline
-                    key={`${v.id}-trail`}
-                    positions={v.trail}
-                    pathOptions={{
-                      color: v.status === "charging" ? CHARGE_COLOR : TRAIL_COLOR,
-                      weight: 2,
-                      opacity: 0.55,
-                    }}
-                  />
-                ))}
-              {!fleetHidden &&
-                vehicles.map((v) => (
-                  <Marker key={v.id} position={v.pos} icon={vehicleIcon(v)}>
-                    <Popup>
-                      <div className="text-xs">
-                        <b>{carDisplay(v.car)}</b>
-                        <br />
-                        {v.name} · {v.car.type} · {v.status}
-                        <br />
-                        {v.speedKph.toFixed(0)} km/h · battery {v.battery.toFixed(0)}%
-                      </div>
-                    </Popup>
-                  </Marker>
-                ))}
               {/* Arcade games (dispatch / route-rush / intercept) on the live map. */}
               <FleetGames hud={gameHud} onActive={setGameActive} />
             </MapContainer>
@@ -550,21 +461,17 @@ export function FleetMap() {
             {/* Controls overlay */}
             <div className="glass-raised absolute left-4 top-4 z-[1000] flex w-60 flex-col gap-3 p-4">
               <div className="flex items-center justify-between">
-                <span className="label-eyebrow">Fleet</span>
-                <span className="tnum text-xs text-accent">{vehicles.length} vehicles</span>
+                <span className="label-eyebrow">Worldwide fleet</span>
+                <span className="tnum text-xs text-accent">{worldCount.total} total</span>
               </div>
-              <div className="grid grid-cols-3 gap-1 text-center text-[11px]">
+              <div className="grid grid-cols-2 gap-1 text-center text-[11px]">
                 <div className="rounded-lg bg-surface/50 py-1.5">
-                  <div className="tnum text-sm text-ink">{vehicles.length - charging}</div>
-                  <div className="text-ink-faint">en route</div>
+                  <div className="tnum text-sm text-ink">{worldCount.visible}</div>
+                  <div className="text-ink-faint">in view</div>
                 </div>
                 <div className="rounded-lg bg-surface/50 py-1.5">
-                  <div className="tnum text-sm text-warn">{charging}</div>
-                  <div className="text-ink-faint">charging</div>
-                </div>
-                <div className="rounded-lg bg-surface/50 py-1.5">
-                  <div className="tnum text-sm text-ink">{ROUTE_GEOMETRY.length}</div>
-                  <div className="text-ink-faint">routes</div>
+                  <div className="tnum text-sm text-accent">🌍</div>
+                  <div className="text-ink-faint">pan anywhere</div>
                 </div>
               </div>
 
@@ -603,15 +510,6 @@ export function FleetMap() {
                 </p>
               )}
 
-              <button
-                onClick={dispatchFromYolo}
-                disabled={detectedVehicles.length === 0}
-                title="Spawn a vehicle for each car/truck/bus from the latest YOLO detection"
-                className="focusable rounded-lg border border-accent/50 bg-accent/10 py-1.5 text-xs text-accent transition hover:bg-accent/20 disabled:opacity-40"
-              >
-                Dispatch {detectedVehicles.length} from YOLO
-              </button>
-
               {/* A -> B real-road route planner */}
               <button
                 onClick={() => {
@@ -636,18 +534,6 @@ export function FleetMap() {
                 </p>
               )}
 
-              <label className="flex flex-col gap-1 text-[11px] text-ink-muted">
-                speed ×{speed.toFixed(1)}
-                <input
-                  type="range"
-                  min={0.5}
-                  max={4}
-                  step={0.5}
-                  value={speed}
-                  onChange={(e) => setSpeed(Number(e.target.value))}
-                  className="accent-accent"
-                />
-              </label>
             </div>
           </div>
         </motion.div>

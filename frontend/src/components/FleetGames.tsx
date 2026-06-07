@@ -177,6 +177,7 @@ export function FleetGames({
   const [stops, setStops] = useState<LatLng[]>([]);
   const [picked, setPicked] = useState<number[]>([]);
   const [tsp, setTsp] = useState<{ your: number; best: number; pct: number } | null>(null);
+  const [tspLoading, setTspLoading] = useState(false);
 
   // location search
   const [q, setQ] = useState("");
@@ -386,13 +387,19 @@ export function FleetGames({
     sound.blip();
     setPicked((pp) => (pp.includes(i) ? pp : [...pp, i]));
   };
-  const submitTsp = () => {
-    if (picked.length !== stops.length) return;
-    const your = pathDist(picked.map((i) => stops[i]));
-    const bestDist = tspBest(stops).dist;
-    const pct = Math.round((bestDist / your) * 100);
+  const submitTsp = async () => {
+    if (picked.length !== stops.length || tspLoading) return;
+    setTspLoading(true);
+    const yourStops = picked.map((i) => stops[i]);
+    const bestStops = tspBest(stops).order.map((i) => stops[i]);
+    // Real ROAD distance via OSRM for both routes (straight-line fallback).
+    const [yp, bp] = await Promise.all([routeThrough(yourStops), routeThrough(bestStops)]);
+    const your = yp ? yp.distanceM : pathDist(yourStops);
+    const bestDist = bp ? bp.distanceM : pathDist(bestStops);
+    const pct = Math.min(100, Math.round((bestDist / your) * 100));
     setTsp({ your, best: bestDist, pct });
     setBest(saveHi("tsp", pct));
+    setTspLoading(false);
     sound.success();
   };
 
@@ -539,8 +546,10 @@ export function FleetGames({
         <div className="flex flex-col gap-1.5">
           {!tsp ? (
             <>
-              <p className="text-[11px] text-ink-faint">From <b>S</b>, click the red stops in your visiting order — shortest loop wins.</p>
-              <button onClick={submitTsp} disabled={picked.length !== stops.length} className={`${BTN} disabled:opacity-40`}>Submit ({picked.length}/{stops.length})</button>
+              <p className="text-[11px] text-ink-faint">From <b>S</b>, click the red stops in your visiting order — shortest <b>road</b> route wins.</p>
+              <button onClick={() => void submitTsp()} disabled={picked.length !== stops.length || tspLoading} className={`${BTN} disabled:opacity-40`}>
+                {tspLoading ? "routing…" : `Submit (${picked.length}/${stops.length})`}
+              </button>
             </>
           ) : (
             <>

@@ -1,15 +1,19 @@
 import { useMemo, useState } from "react";
 
-import { brands, type Car, carDisplay, countries, filterCars, types } from "@/lib/cars";
+import { brands, type Car, carDisplay, countries, domains, filterCars, types } from "@/lib/cars";
 
-/** A filterable/sortable catalogue of real cars. Picking one spawns it in the fleet. */
+/** A filterable catalogue of real vehicles (road/sea/air/underwater). Picking one spawns it. */
 export function CarPicker({ onPick, onClose }: { onPick: (c: Car) => void; onClose: () => void }) {
+  const [domain, setDomain] = useState("");
   const [brand, setBrand] = useState("");
   const [country, setCountry] = useState("");
   const [type, setType] = useState("");
   const [q, setQ] = useState("");
 
-  const list = useMemo(() => filterCars({ brand, country, type, q }), [brand, country, type, q]);
+  const list = useMemo(
+    () => filterCars({ domain, brand, country, type, q }),
+    [domain, brand, country, type, q],
+  );
   const sel =
     "focusable rounded-lg border border-hairline bg-surface/60 px-1.5 py-1 text-[11px] text-ink";
 
@@ -32,7 +36,15 @@ export function CarPicker({ onPick, onClose }: { onPick: (c: Car) => void; onClo
         className="focusable w-full rounded-lg border border-hairline bg-surface/60 px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint"
       />
 
-      <div className="grid grid-cols-3 gap-1">
+      <div className="grid grid-cols-2 gap-1">
+        <select value={domain} onChange={(e) => setDomain(e.target.value)} className={sel}>
+          <option value="">domain</option>
+          {domains().map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
         <select value={brand} onChange={(e) => setBrand(e.target.value)} className={sel}>
           <option value="">brand</option>
           {brands().map((b) => (
