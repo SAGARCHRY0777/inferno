@@ -102,11 +102,22 @@ await safe("theme", async () => {
   await hold(1800, 5);
 });
 
-// --- Fleet Command map: vehicles trace real roads ---
+// --- Fleet Command map: worldwide fleet (zoom out to reveal global traffic) ---
 await safe("fleet", async () => {
   await page.locator("header").getByRole("button", { name: "Fleet" }).click();
   await page.waitForTimeout(2200); // tiles
-  await hold(9000, 26); // vehicles glide along baked OSRM geometry
+  // zoom out to the whole world so the worldwide fleet is visible
+  await page.mouse.move(640, 380);
+  for (let i = 0; i < 12; i++) {
+    await page.mouse.wheel(0, 110);
+    await page.waitForTimeout(140);
+  }
+  await page.waitForTimeout(2800); // world vehicles populate + drift
+  // refresh the gallery's Fleet screenshot with the new worldwide view
+  await safe("fleet-shot", () =>
+    page.screenshot({ path: join(here, "..", "docs", "screenshots", "09-fleet-map.png") }),
+  );
+  await hold(7000, 22); // GIF frames of global traffic
   await page.keyboard.press("Escape");
   await page.waitForTimeout(500);
 });
