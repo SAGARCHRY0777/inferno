@@ -9,10 +9,12 @@ so scaling it is just running more copies behind a load balancer.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import CollectorRegistry, generate_latest
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
 from starlette.concurrency import run_in_threadpool
@@ -127,9 +129,17 @@ def create_app() -> FastAPI:
         body = await run_in_threadpool(generate_latest, registry)
         return PlainTextResponse(body, media_type=CONTENT_TYPE_LATEST)
 
-    @app.get("/", include_in_schema=False)
-    async def root() -> dict:
-        return {"service": settings.service_name, "docs": "/docs", "api": prefix}
+    # Single-container demo deploys can serve the built UI from the gateway so the
+    # browser hits one origin — API + WebSockets need zero cross-origin/URL config.
+    # API routes above are registered first, so they take precedence over the mount.
+    frontend_dir = settings.server.serve_frontend_dir
+    if frontend_dir and Path(frontend_dir).is_dir():
+        app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+    else:
+
+        @app.get("/", include_in_schema=False)
+        async def root() -> dict:
+            return {"service": settings.service_name, "docs": "/docs", "api": prefix}
 
     return app
 

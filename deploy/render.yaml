@@ -1,49 +1,20 @@
-# Render.com blueprint for a clickable Inferno demo (core, no heavy ML).
-# In Render: New + > Blueprint > point at this repo. It provisions:
-#   - a Redis instance
-#   - the gateway (web service)
-#   - a dummy-echo worker (background worker)
-#   - the frontend (static site) built to talk to the gateway
-# The heavy ML models (yolo/whisper/distilbert/RAG/chat) need a paid instance
-# with enough RAM/CPU; run those locally or scale a worker up.
-
+# Render.com blueprint — FREE one-click deploy of the clickable Inferno demo.
+#
+# A SINGLE web service (no separate Redis/worker/frontend services, no paid
+# background worker) built from deploy/Dockerfile.demo: one container runs Redis
+# + a dummy-echo worker + the gateway, and the gateway serves the UI same-origin
+# so the API and WebSockets work with zero extra config.
+#
+# Deploy:  Render Dashboard -> New + -> Blueprint -> pick this repo -> Apply.
+# The free instance sleeps after ~15 min idle and wakes on the next request
+# (~30s cold start). The heavy ML models stay local — this demo serves the
+# dependency-free dummy-echo model (which is what the stress test exercises),
+# plus the full dashboard, 20 themes, command palette, and Fleet map.
 services:
-  - type: redis
-    name: inferno-redis
-    plan: free
-    ipAllowList: []
-
   - type: web
-    name: inferno-gateway
+    name: inferno
     runtime: docker
-    dockerfilePath: ./deploy/Dockerfile.core
+    dockerfilePath: ./deploy/Dockerfile.demo
     plan: free
-    envVars:
-      - key: INFERNO_REDIS__URL
-        fromService: { name: inferno-redis, type: redis, property: connectionString }
-      - key: INFERNO_SERVER__CORS_ORIGINS
-        value: '["*"]'
-      - key: PORT
-        value: "8000"
-
-  - type: worker
-    name: inferno-worker-dummy
-    runtime: docker
-    dockerfilePath: ./deploy/Dockerfile.core
-    plan: free
-    dockerCommand: python -m backend.worker.main
-    envVars:
-      - key: INFERNO_REDIS__URL
-        fromService: { name: inferno-redis, type: redis, property: connectionString }
-      - key: INFERNO_WORKER__MODEL_NAME
-        value: dummy-echo
-
-  - type: web
-    name: inferno-frontend
-    runtime: static
-    buildCommand: cd frontend && npm ci && npm run build
-    staticPublishPath: ./frontend/dist
-    envVars:
-      # Point the built UI at the deployed gateway (set after the gateway is live).
-      - key: VITE_API_BASE
-        value: https://inferno-gateway.onrender.com/api/v1
+    healthCheckPath: /api/v1/health
+    autoDeploy: true

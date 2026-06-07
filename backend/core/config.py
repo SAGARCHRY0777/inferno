@@ -126,6 +126,11 @@ class ServerSettings(BaseModel):
         description="Allowed browser origins for the dev UI.",
     )
     api_prefix: str = Field(default="/api/v1")
+    serve_frontend_dir: str = Field(
+        default="",
+        description="If set to a built frontend directory, the gateway serves it "
+        "at / (same-origin). Used for single-container demo deploys; empty in dev.",
+    )
 
 
 class MetricsSettings(BaseModel):

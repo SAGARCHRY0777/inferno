@@ -1,0 +1,42 @@
+# All-in-one FREE demo image. One container runs Redis + a dummy-echo worker +
+# the gateway, and the gateway serves the built UI — so the whole clickable demo
+# is a SINGLE service, same-origin (API + WebSockets need zero cross-origin or
+# URL config). No torch/ML here, so it fits a free 512MB instance. The heavy
+# models stay local (run scripts\run-all.bat). See DEPLOY.md.
+
+# 1) Build the static UI (relative /api/v1 — no VITE_API_BASE => same-origin).
+FROM node:20-alpine AS web
+WORKDIR /web
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# 2) Runtime: python + an in-container Redis + the app.
+FROM python:3.10-slim
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends redis-server \
+    && rm -rf /var/lib/apt/lists/*
+
+# Runtime-only deps (skip the test/load tooling so no compiler is needed).
+COPY requirements.txt ./
+RUN grep -ivE '^(pytest|locust)' requirements.txt > req-runtime.txt \
+    && pip install --upgrade pip \
+    && pip install -r req-runtime.txt \
+    && rm req-runtime.txt
+
+COPY backend ./backend
+COPY --from=web /web/dist ./frontend-dist
+COPY deploy/demo-entrypoint.sh ./demo-entrypoint.sh
+RUN chmod +x ./demo-entrypoint.sh
+
+ENV INFERNO_SERVER__SERVE_FRONTEND_DIR=/app/frontend-dist \
+    INFERNO_REDIS__URL=redis://127.0.0.1:6379/0 \
+    INFERNO_WORKER__MODEL_NAME=dummy-echo
+
+# The host (Render/Fly) injects $PORT; default 8000 for `docker run` locally.
+EXPOSE 8000
+CMD ["./demo-entrypoint.sh"]

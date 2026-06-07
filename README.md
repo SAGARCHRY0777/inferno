@@ -144,12 +144,13 @@ scripts\run-frontend.bat
 > `scripts\make-demo.bat` drives a ~50s scripted tour with Playwright and
 > writes `docs\demo\inferno-demo.gif` + `inferno-demo.webm`.
 
-### Deploy a live demo
+### Deploy a live demo (free, one click)
 
-A recruiter-clickable demo (frontend + gateway + Redis + a light worker) is one
-blueprint away — see **[DEPLOY.md](DEPLOY.md)** for Render / Fly.io / Vercel
-steps. The heavy ML models need a paid box; keep those local. Configs live in
-[`deploy/`](deploy/).
+The whole demo runs as **one free Render service** — a single container
+([`deploy/Dockerfile.demo`](deploy/Dockerfile.demo)) runs Redis + a dummy worker +
+the gateway, and the gateway serves the UI same-origin (so API + WebSockets need
+zero config). **No credit card.** Render → **New + → Blueprint** → pick this repo →
+**Apply**. Full steps in **[DEPLOY.md](DEPLOY.md)**. Heavy ML models stay local.
 
 ### Reproduce or copy the environment
 

@@ -8,18 +8,30 @@
 > WebSocket results, the live dashboard, 20 themes, the Fleet map) using the
 > dependency-free **dummy** model, so it costs ~nothing to host.
 
-You need your own hosting account; pick **one** path.
+You need your own (free) hosting account; pick **one** path.
 
-## Option A — Render (one blueprint, easiest)
-1. Push this repo to GitHub.
-2. Render → **New + → Blueprint** → select the repo. It reads
-   [`deploy/render.yaml`](deploy/render.yaml) and provisions Redis + gateway +
-   dummy worker + the static frontend.
-3. After the gateway is live, set the frontend's `VITE_API_BASE` to the gateway
-   URL (e.g. `https://inferno-gateway.onrender.com/api/v1`) and redeploy the
-   static site.
-4. Open the frontend URL. Submit a `dummy-echo` job, run the stress test, switch
-   themes, open the Fleet map.
+## Option A — Render, one free service (recommended) ⭐
+
+The whole demo runs as a **single free web service** — one container
+([`deploy/Dockerfile.demo`](deploy/Dockerfile.demo)) runs Redis + a dummy-echo
+worker + the gateway, and the gateway serves the UI **same-origin**, so the API
+and WebSockets work with zero cross-origin/URL config. **No credit card** (Render's
+free tier doesn't require one), no separate Redis/worker/frontend services.
+
+1. Push this repo to GitHub (done).
+2. Sign up at **[render.com](https://render.com)** (free; "Sign in with GitHub").
+3. **New + → Blueprint** → pick `SAGARCHRY0777/inferno` → **Apply**. Render reads
+   [`deploy/render.yaml`](deploy/render.yaml) and builds the one service.
+4. Wait ~3–5 min for the build. Open the service URL (e.g.
+   `https://inferno.onrender.com`) — that's your **live demo**.
+
+What works on it: the full dashboard, **stress test** (live throughput/latency/
+batch charts), submitting **dummy-echo** text jobs, 20 themes, the command
+palette, and the Fleet map. The heavy models (YOLO/Whisper/RAG) and chat stay
+**local** (`scripts\run-all.bat`) — they don't fit a free 512 MB box.
+
+> The free instance sleeps after ~15 min idle and cold-starts in ~30 s on the
+> next visit — fine for a portfolio link.
 
 ## Option B — Fly.io (gateway+worker) + Vercel (frontend)
 ```bash
