@@ -202,6 +202,7 @@ export function FleetMap() {
   const [driving, setDriving] = useState(false);
   const [tripCar, setTripCar] = useState<{ pos: LatLng; heading: number; t: number } | null>(null);
   const [gameHud, setGameHud] = useState<HTMLDivElement | null>(null);
+  const [gameActive, setGameActive] = useState(false);
 
   const setStop = (i: number, p: Place) => setStops((s) => s.map((v, idx) => (idx === i ? p : v)));
   const addStop = () => setStops((s) => (s.length >= 6 ? s : [...s, null]));
@@ -281,15 +282,15 @@ export function FleetMap() {
     }
   }, [open, vehicles.length]);
 
-  // Simulation loop.
+  // Simulation loop (paused while an arcade game is active, to declutter the map).
   useEffect(() => {
-    if (!open || !running) return;
+    if (!open || !running || gameActive) return;
     const id = window.setInterval(() => {
       const dt = (TICK_MS / 1000) * TIME_SCALE * speedRef.current;
       setVehicles((vs) => vs.map((v) => stepVehicle(v, dt)));
     }, TICK_MS);
     return () => window.clearInterval(id);
-  }, [open, running]);
+  }, [open, running, gameActive]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
@@ -355,14 +356,15 @@ export function FleetMap() {
                 attribution='&copy; OpenStreetMap &copy; CARTO'
               />
               <PlanPicker active={planMode} onPick={onPick} />
-              {/* Real-road route outlines (key includes length so leaflet repaints). */}
-              {ROUTE_GEOMETRY.map((r, i) => (
-                <Polyline
-                  key={`route-${i}-${r.length}`}
-                  positions={r}
-                  pathOptions={{ color: "#ffffff", weight: 1, opacity: 0.14 }}
-                />
-              ))}
+              {/* Real-road route outlines (hidden during a game to declutter). */}
+              {!gameActive &&
+                ROUTE_GEOMETRY.map((r, i) => (
+                  <Polyline
+                    key={`route-${i}-${r.length}`}
+                    positions={r}
+                    pathOptions={{ color: "#ffffff", weight: 1, opacity: 0.14 }}
+                  />
+                ))}
               {/* A->B planned route + endpoint pins. */}
               {planned && (
                 <Polyline key={`plan-${planned.length}`} positions={planned} pathOptions={{ color: TRAIL_COLOR, weight: 3, opacity: 0.9 }} />
@@ -400,32 +402,34 @@ export function FleetMap() {
                 />
               )}
               {tripCar && <Marker position={tripCar.pos} icon={tripCarIcon(tripCar.heading)} />}
-              {vehicles.map((v) => (
-                <Polyline
-                  key={`${v.id}-trail`}
-                  positions={v.trail}
-                  pathOptions={{
-                    color: v.status === "charging" ? CHARGE_COLOR : TRAIL_COLOR,
-                    weight: 2,
-                    opacity: 0.55,
-                  }}
-                />
-              ))}
-              {vehicles.map((v) => (
-                <Marker key={v.id} position={v.pos} icon={vehicleIcon(v)}>
-                  <Popup>
-                    <div className="text-xs">
-                      <b>{v.name}</b> · {v.label}
-                      <br />
-                      {v.status} · {v.speedKph.toFixed(0)} km/h
-                      <br />
-                      battery {v.battery.toFixed(0)}%
-                    </div>
-                  </Popup>
-                </Marker>
-              ))}
+              {!gameActive &&
+                vehicles.map((v) => (
+                  <Polyline
+                    key={`${v.id}-trail`}
+                    positions={v.trail}
+                    pathOptions={{
+                      color: v.status === "charging" ? CHARGE_COLOR : TRAIL_COLOR,
+                      weight: 2,
+                      opacity: 0.55,
+                    }}
+                  />
+                ))}
+              {!gameActive &&
+                vehicles.map((v) => (
+                  <Marker key={v.id} position={v.pos} icon={vehicleIcon(v)}>
+                    <Popup>
+                      <div className="text-xs">
+                        <b>{v.name}</b> · {v.label}
+                        <br />
+                        {v.status} · {v.speedKph.toFixed(0)} km/h
+                        <br />
+                        battery {v.battery.toFixed(0)}%
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
               {/* Arcade games (dispatch / route-rush / intercept) on the live map. */}
-              <FleetGames hud={gameHud} />
+              <FleetGames hud={gameHud} onActive={setGameActive} />
             </MapContainer>
 
             {/* Trip planner overlay (right): geocode any address, route A→B→C→D */}

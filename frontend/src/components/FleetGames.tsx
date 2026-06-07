@@ -75,9 +75,20 @@ interface Order {
   reward: number;
 }
 
-export function FleetGames({ hud }: { hud: HTMLElement | null }) {
+export function FleetGames({
+  hud,
+  onActive,
+}: {
+  hud: HTMLElement | null;
+  onActive?: (active: boolean) => void;
+}) {
   const map = useMap();
   const [mode, setMode] = useState<Mode | null>(null);
+
+  // Tell the parent when a game is on, so it can hide/pause the fleet sim clutter.
+  useEffect(() => {
+    onActive?.(mode !== null);
+  }, [mode, onActive]);
   const [running, setRunning] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [score, setScore] = useState(0);
@@ -330,9 +341,9 @@ export function FleetGames({ hud }: { hud: HTMLElement | null }) {
               reset();
               setMode(null);
             }}
-            className="text-[10px] text-ink-faint hover:text-ink"
+            className="focusable rounded-md border border-hairline px-2 py-0.5 text-[10px] text-ink-muted hover:border-danger/50 hover:text-danger"
           >
-            exit
+            ✕ Exit game
           </button>
         )}
       </div>
