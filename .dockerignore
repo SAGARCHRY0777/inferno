@@ -24,8 +24,13 @@
 .DS_Store
 Thumbs.db
 
-# Frontend has its OWN image and build context (./frontend)
-frontend/
+# Frontend build artifacts only — keep the SOURCE in context so the all-in-one
+# demo image (deploy/Dockerfile.demo) can build the UI. The plain backend images
+# don't COPY frontend/ at all, so the small source tree is harmless to them.
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
 
 # Local runtime state, downloaded model weights, bundled portable Redis
 artifacts/
