@@ -41,4 +41,5 @@ start "Inferno Frontend" cmd /k "%HERE%run-frontend.bat"
 
 echo [Inferno] All components launching. Open http://localhost:5173
 echo [Inferno] (Tip: the resnet/whisper/chat windows take 10-30s on first run to download+load.)
+echo [Inferno] To close everything later, run:  scripts\stop-all.bat
 endlocal
