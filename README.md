@@ -7,12 +7,14 @@ time over **WebSockets**, correlated by job id. A live mission-control dashboard
 streams throughput, latency percentiles, queue depth, batch-size distribution,
 worker health, and CPU/GPU utilization.
 
+**▶ Live demo: [inferno-ny28.onrender.com](https://inferno-ny28.onrender.com)** — free
+tier, so the first visit wakes it in ~50s. Heavy ML models run locally; see [DEPLOY.md](DEPLOY.md).
+
 ![Inferno demo](docs/demo/inferno-demo.gif)
 
 <sub>↑ live capture: submit → batched inference → stress test (throughput + batch
-sizes climb) → command palette → theme switch → Fleet Command (autonomous
-vehicles tracing real San-Francisco roads). Full-length recording:
-[`docs/demo/inferno-demo.webm`](docs/demo/inferno-demo.webm).</sub>
+sizes climb) → command palette → theme switch → the Fleet Command map. Full-length
+recording: [`docs/demo/inferno-demo.webm`](docs/demo/inferno-demo.webm).</sub>
 
 ![Inferno console](docs/screenshots/01-dashboard.png)
 
@@ -30,9 +32,15 @@ vehicles tracing real San-Francisco roads). Full-length recording:
 | **Command palette (⌘K)** | **Live activity feed** |
 | ![Command palette](docs/screenshots/04-command-palette.png) | ![Activity](docs/screenshots/05-activity.png) |
 
-| **Streaming chat — local LLM, RAG-grounded, with citations** | **Fleet Command — AV map with real-road path tracing** |
+| **Streaming chat — local LLM, RAG-grounded, with citations** | **Fleet Command — worldwide fleet, multi-stop trip planner & arcade** |
 | --- | --- |
 | ![Chat](docs/screenshots/10-chat-rag.png) | ![Fleet map](docs/screenshots/09-fleet-map.png) |
+
+<sub>The Fleet Command map is a free, keyless OpenStreetMap experiment: a
+viewport-culled **worldwide fleet** (cars/ships/planes/submarines making real
+airport→airport / port→port journeys), a **multi-stop trip planner** with live
+OSRM routing + ETAs, and a small **arcade** (dispatch / route-rush / 20-level
+chase).</sub>
 
 <sub>20 runtime themes — e.g. Synthwave: ![Synthwave theme](docs/screenshots/06-theme-synthwave.png)</sub>
 

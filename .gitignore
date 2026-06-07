@@ -30,6 +30,7 @@ tools/*.log
 node_modules/
 frontend/dist/
 frontend/node_modules/
+*.tsbuildinfo
 
 # OS / editor
 .DS_Store
