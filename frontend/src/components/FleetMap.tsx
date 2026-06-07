@@ -14,6 +14,7 @@ import {
 } from "react-leaflet";
 
 import {
+  bearing,
   formatEta,
   formatKm,
   type LatLng,
@@ -82,6 +83,19 @@ function stopPin(index: number): L.DivIcon {
     html: `<div style="width:22px;height:22px;border-radius:50%;background:${color};color:#0A0B0F;
       font:700 12px/22px ui-sans-serif,system-ui;text-align:center;box-shadow:0 0 10px ${color};
       border:2px solid #0A0B0F">${letter}</div>`,
+  });
+}
+
+/** The dispatched vehicle driving the planned route (a heading-aware arrow). */
+function tripCarIcon(heading: number): L.DivIcon {
+  return L.divIcon({
+    className: "av-marker",
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+    html: `<div style="transform:rotate(${heading}deg);filter:drop-shadow(0 0 6px #3DDC97)">
+      <svg width="22" height="22" viewBox="0 0 16 16">
+        <path d="M8 0.5 L13.5 14.5 L8 11 L2.5 14.5 Z" fill="#3DDC97" stroke="#0A0B0F" stroke-width="0.7"/>
+      </svg></div>`,
   });
 }
 
@@ -184,6 +198,8 @@ export function FleetMap() {
   const [trip, setTrip] = useState<RoutePlan | null>(null);
   const [tripStatus, setTripStatus] = useState<"idle" | "planning" | "failed">("idle");
   const [fitTarget, setFitTarget] = useState<LatLng[] | null>(null);
+  const [driving, setDriving] = useState(false);
+  const [tripCar, setTripCar] = useState<{ pos: LatLng; heading: number; t: number } | null>(null);
 
   const setStop = (i: number, p: Place) => setStops((s) => s.map((v, idx) => (idx === i ? p : v)));
   const addStop = () => setStops((s) => (s.length >= 6 ? s : [...s, null]));
@@ -196,6 +212,8 @@ export function FleetMap() {
     if (coords.length < 2) return;
     setTripStatus("planning");
     setTrip(null);
+    setTripCar(null);
+    setDriving(false);
     const plan = await routeThrough(coords);
     if (plan) {
       setTrip(plan);
@@ -205,6 +223,39 @@ export function FleetMap() {
       setTripStatus("failed");
     }
   };
+
+  const driveTrip = () => {
+    if (!trip || trip.geometry.length < 2) return;
+    setTripCar({ pos: trip.geometry[0], heading: 0, t: 0 });
+    setDriving(true);
+  };
+
+  // Animate the dispatched vehicle along the route at a steady pace.
+  useEffect(() => {
+    if (!driving || !trip || trip.geometry.length < 2) return;
+    const geom = trip.geometry;
+    const durationMs = Math.min(45000, Math.max(12000, trip.durationS * 25));
+    const tickMs = 90;
+    let t = 0;
+    const id = window.setInterval(() => {
+      t = Math.min(1, t + tickMs / durationMs);
+      const f = t * (geom.length - 1);
+      const i = Math.min(Math.floor(f), geom.length - 2);
+      const a = geom[i];
+      const b = geom[i + 1];
+      const frac = f - i;
+      setTripCar({
+        pos: [a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac],
+        heading: bearing(a, b),
+        t,
+      });
+      if (t >= 1) {
+        setDriving(false);
+        window.clearInterval(id);
+      }
+    }, tickMs);
+    return () => window.clearInterval(id);
+  }, [driving, trip]);
 
   const onPick = (p: LatLng) => {
     const next = picks.length >= 2 ? [p] : [...picks, p];
@@ -335,6 +386,18 @@ export function FleetMap() {
                   </Popup>
                 </Marker>
               ))}
+              {/* The dispatched vehicle driving the route + the trail it has covered. */}
+              {tripCar && trip && (
+                <Polyline
+                  key="tripcar-trail"
+                  positions={trip.geometry.slice(
+                    0,
+                    Math.max(2, Math.floor(tripCar.t * (trip.geometry.length - 1)) + 1),
+                  )}
+                  pathOptions={{ color: "#00E5FF", weight: 5, opacity: 0.9 }}
+                />
+              )}
+              {tripCar && <Marker position={tripCar.pos} icon={tripCarIcon(tripCar.heading)} />}
               {vehicles.map((v) => (
                 <Polyline
                   key={`${v.id}-trail`}
@@ -425,6 +488,25 @@ export function FleetMap() {
                       </span>
                     </div>
                   ))}
+                  <button
+                    onClick={() => (driving ? setDriving(false) : driveTrip())}
+                    className="focusable mt-1 rounded-lg bg-accent px-2 py-1.5 text-[11px] font-semibold text-base hover:brightness-110"
+                  >
+                    {driving ? "■ Stop" : tripCar && tripCar.t >= 1 ? "↻ Drive again" : "🚗 Drive it"}
+                  </button>
+                  {tripCar && (
+                    <div className="flex items-center gap-2">
+                      <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-hover">
+                        <div
+                          className="h-full rounded-full bg-accent"
+                          style={{ width: `${Math.round(tripCar.t * 100)}%` }}
+                        />
+                      </div>
+                      <span className="tnum shrink-0 text-[10px] text-ink-muted">
+                        {tripCar.t >= 1 ? "arrived" : `${formatEta(trip.durationS * (1 - tripCar.t))} left`}
+                      </span>
+                    </div>
+                  )}
                   <p className="mt-1 text-[10px] text-ink-faint">
                     ETA is a typical drive time (no live traffic).
                   </p>

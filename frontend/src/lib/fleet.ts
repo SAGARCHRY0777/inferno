@@ -77,7 +77,7 @@ function haversine(a: LatLng, b: LatLng): number {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-function bearing(a: LatLng, b: LatLng): number {
+export function bearing(a: LatLng, b: LatLng): number {
   const dLng = ((b[1] - a[1]) * Math.PI) / 180;
   const la1 = (a[0] * Math.PI) / 180;
   const la2 = (b[0] * Math.PI) / 180;
