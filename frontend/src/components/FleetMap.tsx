@@ -3,12 +3,24 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, Marker, Polyline, Popup, TileLayer, useMapEvents } from "react-leaflet";
+import {
+  MapContainer,
+  Marker,
+  Polyline,
+  Popup,
+  TileLayer,
+  useMap,
+  useMapEvents,
+} from "react-leaflet";
 
 import {
+  formatEta,
+  formatKm,
   type LatLng,
   ROUTE_GEOMETRY,
   ROUTE_GEOMETRY_SOURCE,
+  type RoutePlan,
+  routeThrough,
   SF_CENTER,
   VEHICLE_CLASSES,
   type Vehicle,
@@ -16,6 +28,7 @@ import {
   spawnVehicle,
   stepVehicle,
 } from "@/lib/fleet";
+import { type Place, searchPlaces } from "@/lib/geocode";
 import { useStore } from "@/store/useStore";
 
 /** Captures map clicks for the A->B route planner (must live inside MapContainer). */
@@ -56,6 +69,100 @@ function vehicleIcon(v: Vehicle): L.DivIcon {
   });
 }
 
+const STOP_COLORS = ["#3DDC97", "#FF4D6D", "#FFB020", "#00E5FF", "#B388FF", "#FF8A65"];
+
+/** A lettered (A, B, C…) stop marker for the trip planner. */
+function stopPin(index: number): L.DivIcon {
+  const color = STOP_COLORS[index % STOP_COLORS.length];
+  const letter = String.fromCharCode(65 + index);
+  return L.divIcon({
+    className: "",
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+    html: `<div style="width:22px;height:22px;border-radius:50%;background:${color};color:#0A0B0F;
+      font:700 12px/22px ui-sans-serif,system-ui;text-align:center;box-shadow:0 0 10px ${color};
+      border:2px solid #0A0B0F">${letter}</div>`,
+  });
+}
+
+/** Pans/zooms the map to fit the planned trip's geometry. */
+function FitBounds({ positions }: { positions: LatLng[] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (positions && positions.length > 0) {
+      map.fitBounds(positions as L.LatLngBoundsExpression, { padding: [60, 60] });
+    }
+  }, [positions, map]);
+  return null;
+}
+
+/** Free-text address box with debounced worldwide autocomplete (Photon/OSM). */
+function AddressInput({
+  index,
+  value,
+  onSelect,
+}: {
+  index: number;
+  value: Place | null;
+  onSelect: (p: Place) => void;
+}) {
+  const [q, setQ] = useState(value?.label ?? "");
+  const [results, setResults] = useState<Place[]>([]);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setQ(value?.label ?? "");
+  }, [value]);
+
+  useEffect(() => {
+    if (!q || (value && q === value.label)) {
+      setResults([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const id = window.setTimeout(() => {
+      void searchPlaces(q, ctrl.signal).then((r) => {
+        setResults(r);
+        setOpen(r.length > 0);
+      });
+    }, 300);
+    return () => {
+      ctrl.abort();
+      window.clearTimeout(id);
+    };
+  }, [q, value]);
+
+  const letter = String.fromCharCode(65 + index);
+  return (
+    <div className="relative">
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onFocus={() => results.length > 0 && setOpen(true)}
+        placeholder={`${letter} · type an address…`}
+        className="focusable w-full rounded-lg border border-hairline bg-surface/60 px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint"
+      />
+      {open && results.length > 0 && (
+        <ul className="absolute z-[1100] mt-1 max-h-48 w-full overflow-auto rounded-lg border border-hairline bg-base shadow-xl">
+          {results.map((r, i) => (
+            <li
+              key={`${r.lat}-${r.lng}-${i}`}
+              onClick={() => {
+                onSelect(r);
+                setQ(r.label);
+                setOpen(false);
+              }}
+              className="cursor-pointer px-2.5 py-1.5 text-[11px] text-ink-muted hover:bg-surface-hover"
+            >
+              {r.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function FleetMap() {
   const open = useStore((s) => s.fleetOpen);
   const setOpen = useStore((s) => s.setFleetOpen);
@@ -71,6 +178,33 @@ export function FleetMap() {
   const [picks, setPicks] = useState<LatLng[]>([]);
   const [planned, setPlanned] = useState<LatLng[] | null>(null);
   const [planStatus, setPlanStatus] = useState<"idle" | "planning" | "failed">("idle");
+
+  // Multi-stop trip planner (geocoded addresses -> real distance + ETA, worldwide).
+  const [stops, setStops] = useState<(Place | null)[]>([null, null]);
+  const [trip, setTrip] = useState<RoutePlan | null>(null);
+  const [tripStatus, setTripStatus] = useState<"idle" | "planning" | "failed">("idle");
+  const [fitTarget, setFitTarget] = useState<LatLng[] | null>(null);
+
+  const setStop = (i: number, p: Place) => setStops((s) => s.map((v, idx) => (idx === i ? p : v)));
+  const addStop = () => setStops((s) => (s.length >= 6 ? s : [...s, null]));
+  const removeStop = (i: number) =>
+    setStops((s) => (s.length <= 2 ? s : s.filter((_, idx) => idx !== i)));
+  const filledStops = stops.filter((p): p is Place => p !== null);
+
+  const planTrip = async () => {
+    const coords = filledStops.map((p) => [p.lat, p.lng] as LatLng);
+    if (coords.length < 2) return;
+    setTripStatus("planning");
+    setTrip(null);
+    const plan = await routeThrough(coords);
+    if (plan) {
+      setTrip(plan);
+      setTripStatus("idle");
+      setFitTarget(plan.geometry);
+    } else {
+      setTripStatus("failed");
+    }
+  };
 
   const onPick = (p: LatLng) => {
     const next = picks.length >= 2 ? [p] : [...picks, p];
@@ -143,7 +277,7 @@ export function FleetMap() {
               <p className="text-[11px] text-ink-faint">
                 live path tracing ·{" "}
                 {ROUTE_GEOMETRY_SOURCE === "osrm" ? "real road geometry (OSRM)" : "straight routes"} ·
-                OpenStreetMap · San Francisco
+                OpenStreetMap · worldwide trip planner
               </p>
             </div>
             <button
@@ -183,6 +317,24 @@ export function FleetMap() {
               {picks.map((p, i) => (
                 <Marker key={`pick-${i}`} position={p} icon={pinIcon(i === 0 ? "#3DDC97" : "#FF4D6D")} />
               ))}
+              {/* Multi-stop trip route + lettered stop markers + auto-fit to bounds. */}
+              <FitBounds positions={fitTarget} />
+              {trip && (
+                <Polyline
+                  key={`trip-${trip.geometry.length}`}
+                  positions={trip.geometry}
+                  pathOptions={{ color: "#3DDC97", weight: 4, opacity: 0.95 }}
+                />
+              )}
+              {filledStops.map((p, i) => (
+                <Marker key={`stop-${i}-${p.lat}-${p.lng}`} position={[p.lat, p.lng]} icon={stopPin(i)}>
+                  <Popup>
+                    <div className="text-xs">
+                      <b>{String.fromCharCode(65 + i)}</b> · {p.label}
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
               {vehicles.map((v) => (
                 <Polyline
                   key={`${v.id}-trail`}
@@ -208,6 +360,77 @@ export function FleetMap() {
                 </Marker>
               ))}
             </MapContainer>
+
+            {/* Trip planner overlay (right): geocode any address, route A→B→C→D */}
+            <div className="glass-raised absolute right-4 top-4 z-[1000] flex max-h-[calc(100%-2rem)] w-72 flex-col gap-2 overflow-auto p-4">
+              <div className="flex items-center justify-between">
+                <span className="label-eyebrow">Trip planner</span>
+                <span className="text-[10px] text-ink-faint">free · worldwide</span>
+              </div>
+              {stops.map((stop, i) => (
+                <div key={`stopin-${i}`} className="flex items-center gap-1">
+                  <div className="flex-1">
+                    <AddressInput index={i} value={stop} onSelect={(p) => setStop(i, p)} />
+                  </div>
+                  {stops.length > 2 && (
+                    <button
+                      onClick={() => removeStop(i)}
+                      title="Remove stop"
+                      className="focusable shrink-0 rounded-md border border-hairline px-1.5 py-1 text-xs text-ink-faint hover:text-danger"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <button
+                  onClick={addStop}
+                  disabled={stops.length >= 6}
+                  className="focusable flex-1 rounded-lg border border-hairline px-2 py-1.5 text-[11px] text-ink-muted hover:bg-surface-hover disabled:opacity-40"
+                >
+                  + Add stop
+                </button>
+                <button
+                  onClick={() => void planTrip()}
+                  disabled={filledStops.length < 2 || tripStatus === "planning"}
+                  className="focusable flex-1 rounded-lg bg-accent px-2 py-1.5 text-[11px] font-semibold text-base hover:brightness-110 disabled:opacity-40"
+                >
+                  {tripStatus === "planning" ? "Planning…" : "Plan trip"}
+                </button>
+              </div>
+              {tripStatus === "failed" && (
+                <p className="text-[11px] text-danger">
+                  Couldn’t route those stops — try nearby addresses.
+                </p>
+              )}
+              {trip && (
+                <div className="flex flex-col gap-1 rounded-lg border border-hairline bg-surface/40 p-2.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-ink-muted">Total</span>
+                    <span className="tnum font-semibold text-accent">
+                      {formatKm(trip.distanceM)} · {formatEta(trip.durationS)}
+                    </span>
+                  </div>
+                  {trip.legs.map((leg, i) => (
+                    <div
+                      key={`leg-${i}`}
+                      className="flex items-center justify-between text-[11px] text-ink-faint"
+                    >
+                      <span>
+                        {String.fromCharCode(65 + i)} → {String.fromCharCode(66 + i)}
+                      </span>
+                      <span className="tnum">
+                        {formatKm(leg.distanceM)} · {formatEta(leg.durationS)}
+                      </span>
+                    </div>
+                  ))}
+                  <p className="mt-1 text-[10px] text-ink-faint">
+                    ETA is a typical drive time (no live traffic).
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Controls overlay */}
             <div className="glass-raised absolute left-4 top-4 z-[1000] flex w-60 flex-col gap-3 p-4">

@@ -194,3 +194,64 @@ export async function planRoute(a: LatLng, b: LatLng, timeoutMs = 8000): Promise
     clearTimeout(timer);
   }
 }
+
+// --------------------------------------------------------------------------- #
+// Multi-stop trip planning (A -> B -> C -> ...) with real distance + drive time.
+// OSRM returns the full road geometry, a total distance/duration, and a per-leg
+// breakdown. ETA is a road-speed estimate (no live traffic — that needs a paid
+// API), i.e. a "typical" drive time.
+// --------------------------------------------------------------------------- #
+export interface RouteLeg {
+  distanceM: number;
+  durationS: number;
+}
+
+export interface RoutePlan {
+  geometry: LatLng[];
+  distanceM: number;
+  durationS: number;
+  legs: RouteLeg[];
+}
+
+interface OsrmRoute {
+  distance: number;
+  duration: number;
+  geometry: { coordinates: [number, number][] };
+  legs?: { distance: number; duration: number }[];
+}
+
+/** Route through 2+ ordered stops. Returns geometry + totals + legs, or null. */
+export async function routeThrough(stops: LatLng[], timeoutMs = 12000): Promise<RoutePlan | null> {
+  if (stops.length < 2) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(osrmUrl(stops), { signal: ctrl.signal });
+    if (!res.ok) return null;
+    const d = (await res.json()) as { code?: string; routes?: OsrmRoute[] };
+    if (d.code !== "Ok" || !d.routes?.length) return null;
+    const r = d.routes[0];
+    return {
+      geometry: r.geometry.coordinates.map(([lng, lat]) => [lat, lng] as LatLng),
+      distanceM: r.distance,
+      durationS: r.duration,
+      legs: (r.legs ?? []).map((l) => ({ distanceM: l.distance, durationS: l.duration })),
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function formatKm(meters: number): string {
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
+}
+
+export function formatEta(seconds: number): string {
+  const min = Math.round(seconds / 60);
+  if (min < 1) return "<1 min";
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  return `${h} h ${min % 60} min`;
+}
