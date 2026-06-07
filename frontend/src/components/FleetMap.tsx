@@ -203,6 +203,8 @@ export function FleetMap() {
   const [tripCar, setTripCar] = useState<{ pos: LatLng; heading: number; t: number } | null>(null);
   const [gameHud, setGameHud] = useState<HTMLDivElement | null>(null);
   const [gameActive, setGameActive] = useState(false);
+  const [hideFleet, setHideFleet] = useState(false);
+  const fleetHidden = gameActive || hideFleet;
 
   const setStop = (i: number, p: Place) => setStops((s) => s.map((v, idx) => (idx === i ? p : v)));
   const addStop = () => setStops((s) => (s.length >= 6 ? s : [...s, null]));
@@ -284,13 +286,13 @@ export function FleetMap() {
 
   // Simulation loop (paused while an arcade game is active, to declutter the map).
   useEffect(() => {
-    if (!open || !running || gameActive) return;
+    if (!open || !running || fleetHidden) return;
     const id = window.setInterval(() => {
       const dt = (TICK_MS / 1000) * TIME_SCALE * speedRef.current;
       setVehicles((vs) => vs.map((v) => stepVehicle(v, dt)));
     }, TICK_MS);
     return () => window.clearInterval(id);
-  }, [open, running, gameActive]);
+  }, [open, running, fleetHidden]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
@@ -357,7 +359,7 @@ export function FleetMap() {
               />
               <PlanPicker active={planMode} onPick={onPick} />
               {/* Real-road route outlines (hidden during a game to declutter). */}
-              {!gameActive &&
+              {!fleetHidden &&
                 ROUTE_GEOMETRY.map((r, i) => (
                   <Polyline
                     key={`route-${i}-${r.length}`}
@@ -402,7 +404,7 @@ export function FleetMap() {
                 />
               )}
               {tripCar && <Marker position={tripCar.pos} icon={tripCarIcon(tripCar.heading)} />}
-              {!gameActive &&
+              {!fleetHidden &&
                 vehicles.map((v) => (
                   <Polyline
                     key={`${v.id}-trail`}
@@ -414,7 +416,7 @@ export function FleetMap() {
                     }}
                   />
                 ))}
-              {!gameActive &&
+              {!fleetHidden &&
                 vehicles.map((v) => (
                   <Marker key={v.id} position={v.pos} icon={vehicleIcon(v)}>
                     <Popup>
@@ -560,6 +562,13 @@ export function FleetMap() {
                   {running ? "⏸" : "▶"}
                 </button>
               </div>
+
+              <button
+                onClick={() => setHideFleet((h) => !h)}
+                className="focusable rounded-lg border border-hairline bg-surface/50 py-1.5 text-xs hover:bg-surface-hover"
+              >
+                {hideFleet ? "👁 Show fleet" : "🙈 Hide fleet"}
+              </button>
 
               <button
                 onClick={dispatchFromYolo}
