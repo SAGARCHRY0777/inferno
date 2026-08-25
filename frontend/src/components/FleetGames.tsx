@@ -146,6 +146,23 @@ export function FleetGames({
   const [player, setPlayer] = useState<Driver | null>(null);
   const playerRef = useRef<Driver | null>(null);
   const arriveRef = useRef<(() => void) | null>(null);
+  // Every setTimeout scheduled by the games is registered here and cleared on
+  // unmount. Without it, closing Fleet Command (Esc) mid-delivery still fired the
+  // 1.1s/1.2s/1.6s callbacks against an unmounted component — setting state and,
+  // worse, kicking off a pointless OSRM geometry request.
+  const timersRef = useRef<number[]>([]);
+  const later = (fn: () => void, ms: number) => {
+    const id = window.setTimeout(fn, ms);
+    timersRef.current.push(id);
+    return id;
+  };
+  useEffect(() => {
+    const timers = timersRef;
+    return () => {
+      timers.current.forEach(window.clearTimeout);
+      timers.current = [];
+    };
+  }, []);
   const setPv = (d: Driver | null) => {
     playerRef.current = d;
     setPlayer(d);
@@ -265,7 +282,7 @@ export function FleetGames({
     setPv(makeDriver(await geom([from, o.pickup])));
     arriveRef.current = () => {
       setStatus("🍳 preparing order…");
-      window.setTimeout(async () => {
+      later(async () => {
         setStatus("📦 delivering");
         setPv(makeDriver(await geom([o.pickup, o.dropoff])));
         arriveRef.current = () => {
@@ -274,7 +291,7 @@ export function FleetGames({
           setOrders((os) => os.filter((x) => x.id !== o.id));
           setStatus("✅ delivered!");
           setBusy(false);
-          window.setTimeout(() => setStatus(""), 1200);
+          later(() => setStatus(""), 1200);
         };
       }, 1100);
     };
@@ -371,7 +388,7 @@ export function FleetGames({
             } else {
               sound.levelup();
               setBanner(`Level ${nextLvl}! faster + more targets`);
-              window.setTimeout(() => setBanner(""), 1600);
+              later(() => setBanner(""), 1600);
               startLevel(nextLvl);
             }
           }

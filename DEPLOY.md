@@ -70,6 +70,8 @@ Pages / Cloudflare Pages. Point it at any reachable gateway with
 - **Chat LLM**: the streaming chat service ([`backend/chat/`](backend/chat/)) is a
   separate deploy; it needs a box that can hold the model — host it apart and set
   the UI's `VITE_CHAT_URL`.
-- CI already builds and (on `main`) pushes the gateway + frontend images to GHCR
-  ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) — you can deploy those
-  images directly.
+- CI **builds** the gateway, frontend and demo images to prove they still build
+  ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) but does **not** push
+  them anywhere — there is no registry login and the workflow runs with
+  `permissions: contents: read`. Build and push them yourself before deploying
+  (see [`k8s/README.md`](k8s/README.md) for the exact commands).

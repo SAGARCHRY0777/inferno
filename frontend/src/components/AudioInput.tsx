@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { toWav16k } from "@/lib/audio";
 
@@ -20,18 +20,39 @@ export function AudioInput({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Release the microphone if this component unmounts mid-recording. It is
+  // rendered conditionally on the selected model being audio, so switching
+  // models while recording unmounts it: without this the MediaRecorder keeps
+  // running, the browser's recording indicator stays lit, and chunksRef keeps
+  // accumulating Blobs for the life of the page.
+  useEffect(() => {
+    return () => {
+      try {
+        if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      } catch {
+        /* recorder already torn down */
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      chunksRef.current = [];
+    };
+  }, []);
 
   async function startRec() {
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const rec = new MediaRecorder(stream);
       chunksRef.current = [];
       rec.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
       rec.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
         setBusy(true);
         try {
           onAudio(await toWav16k(new Blob(chunksRef.current, { type: rec.mimeType })));

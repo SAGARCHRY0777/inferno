@@ -1,6 +1,0 @@
-2026-06-06 16:30:54 [info     ] model_specs_loaded             component=registry count=6 names=['dummy-echo', 'resnet-image', 'distilbert-sentiment', 'yolo-detect', 'whisper-transcribe', 'semantic-search'] service=worker
-2026-06-06T11:01:08.921662Z [info     ] distilbert_loaded              component=model.distilbert device=cpu labels=['NEGATIVE', 'POSITIVE'] model_id=distilbert-base-uncased-finetuned-sst-2-english service=worker
-2026-06-06T11:01:09.622228Z [info     ] worker_ready                   component=worker model_name=distilbert-sentiment service=worker worker_id=worker-DESKTOP-LI412IE-5284-956971
-2026-06-06 16:43:52 [debug    ] window_closed                  batch_size=1 component=batcher full=False model_name=distilbert-sentiment service=worker
-2026-06-06T11:13:52.677790Z [info     ] batch_processed                batch_size=1 component=worker errors=0 model_name=distilbert-sentiment service=worker total=1 worker_id=worker-DESKTOP-LI412IE-5284-956971
-2026-06-06T11:18:31.358741Z [warning  ] redis_error_retrying           component=worker error=Error while reading from localhost:6379 : (10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None) model_name=distilbert-sentiment service=worker worker_id=worker-DESKTOP-LI412IE-5284-956971

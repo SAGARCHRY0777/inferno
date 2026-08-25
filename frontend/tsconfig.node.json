@@ -1,6 +1,12 @@
 {
   "compilerOptions": {
     "composite": true,
+    // Emit the .js/.d.ts for vite.config.ts into a scratch dir, NOT next to the
+    // source. Vite resolves vite.config.js BEFORE vite.config.ts, so a generated
+    // sibling silently shadows the real config and every edit to vite.config.ts
+    // is ignored until someone re-runs `tsc -b`. (composite requires emit, so
+    // redirecting it is the fix rather than noEmit.)
+    "outDir": "./node_modules/.tmp",
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "skipLibCheck": true,
     "module": "ESNext",

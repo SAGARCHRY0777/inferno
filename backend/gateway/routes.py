@@ -37,15 +37,35 @@ router = APIRouter()
 
 
 @router.get("/health", response_model=HealthResponse, tags=["ops"])
-async def health(ctx: GatewayContext = Depends(get_context)) -> HealthResponse:
-    """Liveness + readiness: Redis reachability, models, and live worker count."""
+async def health(
+    response: Response, ctx: GatewayContext = Depends(get_context)
+) -> HealthResponse:
+    """Liveness + readiness: Redis reachability, models, and live worker count.
+
+    Returns **503** when Redis is unreachable. ``httpGet`` probes only inspect the
+    status code, so returning 200 with ``status="degraded"`` would leave a gateway
+    that cannot serve a single inference marked ``Ready`` forever.
+    """
 
     redis_ok = True
     try:
         await get_async_redis().ping()
     except Exception:  # broad on purpose: health must never raise
         redis_ok = False
-    workers = await ctx.broker.list_heartbeats() if redis_ok else []
+
+    # Not inside the ping guard on purpose, but still guarded: a single truncated
+    # or legacy heartbeat value makes model_validate_json raise, which would 500
+    # the probe endpoint and turn one bad Redis key into a gateway restart loop.
+    workers: list = []
+    if redis_ok:
+        try:
+            workers = await ctx.broker.list_heartbeats()
+        except Exception as exc:  # noqa: BLE001 - health must never raise
+            _log.warning("health_heartbeats_failed", error=str(exc))
+
+    if not redis_ok:
+        response.status_code = 503
+
     return HealthResponse(
         status="ok" if redis_ok else "degraded",
         redis=redis_ok,
@@ -72,10 +92,19 @@ async def models() -> list[ModelInfo]:
 
 @router.get("/history", response_model=list[HistoryRecord], tags=["inference"])
 async def history(
-    limit: int = 50, ctx: GatewayContext = Depends(get_context)
+    http_request: HTTPRequest,
+    limit: int = 50,
+    ctx: GatewayContext = Depends(get_context),
 ) -> list[HistoryRecord]:
-    """Recent completed inferences (newest first) from the durable history."""
+    """Recent completed inferences (newest first) from the durable history.
 
+    Authenticated on the same terms as ``/infer``: history rows carry
+    ``input_preview`` (raw user text), so leaving this endpoint open would make
+    ``INFERNO_AUTH__ENABLED=true`` cosmetic — anyone could read every client's
+    inputs. ``identify_client`` is a no-op when auth is disabled.
+    """
+
+    identify_client(http_request)
     limit = max(1, min(limit, 500))
     return await ctx.history_reader.read_recent(limit)
 

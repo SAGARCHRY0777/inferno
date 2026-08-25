@@ -141,7 +141,12 @@ class MetricsHub:
             return
         payload = _envelope(C.WS_TYPE_METRICS, snapshot.model_dump(mode="json"))
         dead: list[WebSocket] = []
-        for client in self._clients:
+        # Iterate a snapshot, not the live set: `_safe_send` awaits, and any
+        # dashboard connecting (connect -> _clients.add) or closing
+        # (disconnect -> _clients.discard) during that suspension would otherwise
+        # raise "Set changed size during iteration", aborting the tick partway so
+        # the remaining clients silently miss the frame.
+        for client in tuple(self._clients):
             if not await _safe_send(client, payload):
                 dead.append(client)
         for client in dead:

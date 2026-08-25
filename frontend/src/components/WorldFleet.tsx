@@ -14,7 +14,24 @@ export interface WorldApi {
   add: (car?: Car) => void;
 }
 
+// react-leaflet compares `props.icon` by identity and calls marker.setIcon() —
+// which replaces the marker's DOM element — whenever it differs. Building a fresh
+// DivIcon inline in render therefore rebuilt every marker's DOM on every tick:
+// at CAP=240 markers and TICK=120ms that is ~2000 icon replacements per second,
+// which is visible jank while panning or zooming. Heading is quantised to 5° so
+// the cache stays small and stable across ticks.
+const iconCache = new Map<string, L.DivIcon>();
+
 function icon(v: WorldVehicle): L.DivIcon {
+  const key = `${domainOf(v.car)}:${Math.round(v.heading / 5) * 5}`;
+  const hit = iconCache.get(key);
+  if (hit) return hit;
+  const made = buildIcon(v);
+  iconCache.set(key, made);
+  return made;
+}
+
+function buildIcon(v: WorldVehicle): L.DivIcon {
   if (domainOf(v.car) === "road") {
     return L.divIcon({
       className: "av-marker",

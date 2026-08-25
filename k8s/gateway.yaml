@@ -29,7 +29,9 @@ spec:
             - containerPort: 8000
           envFrom:
             - configMapRef: { name: inferno-config }
-            - secretRef: { name: inferno-secrets }
+            # optional: the Secret is created out-of-band (see k8s/config.yaml),
+            # so the gateway still starts before it exists, with auth disabled.
+            - secretRef: { name: inferno-secrets, optional: true }
           readinessProbe:
             httpGet: { path: /api/v1/health, port: 8000 }
             initialDelaySeconds: 10

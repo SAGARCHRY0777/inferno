@@ -13,15 +13,31 @@ data:
   INFERNO_INFERENCE__DEVICE: "cpu"
   # Persist HuggingFace/torch downloads on the per-pod model-cache volume.
   HF_HOME: "/models/hf"
+
+  # --- auth ------------------------------------------------------------------ #
+  # The key this flip enforces lives in the `inferno-secrets` Secret, which is
+  # NOT committed (see the note below). Set to "true" together with a real key.
+  # This key previously did not exist, so the instruction to "flip it" pointed at
+  # nothing and /infer stayed unauthenticated on a default deploy.
+  INFERNO_AUTH__ENABLED: "false"
+
+  # Behind an ingress/LB, read the caller IP from X-Forwarded-For so per-client
+  # quotas don't collapse into one bucket keyed on the proxy's pod IP.
+  INFERNO_RATELIMIT__TRUST_PROXY_HEADERS: "true"
 ---
-# Placeholder for secret config (API keys, etc.). Replace before exposing publicly
-# and flip INFERNO_AUTH__ENABLED=true in the ConfigMap to enforce it.
-apiVersion: v1
-kind: Secret
-metadata:
-  name: inferno-secrets
-  namespace: inferno
-type: Opaque
-stringData:
-  # Example only — rotate this. Format/var name follow backend/core/config.py AuthSettings.
-  INFERNO_AUTH__API_KEYS: '["demo-key-change-me"]'
+# NOTE: the `inferno-secrets` Secret is deliberately NOT defined here.
+#
+# It previously shipped a plaintext API key (`demo-key-change-me`) committed to
+# git and included in kustomization.yaml, so `kubectl apply -k k8s/` published a
+# known credential. Create it out-of-band instead, so nothing secret is ever in
+# the repo:
+#
+#   kubectl create secret generic inferno-secrets -n inferno \
+#     --from-literal=INFERNO_AUTH__API_KEYS="[\"$(openssl rand -hex 24)\"]"
+#
+# Then set INFERNO_AUTH__ENABLED: "true" in the ConfigMap above and restart the
+# gateway. For GitOps, use a SealedSecret / External Secrets Operator rather than
+# a plain Secret manifest.
+#
+# Pods reference it optionally, so the stack still starts before it is created
+# (with auth disabled) — see the `envFrom` blocks in gateway.yaml / workers.yaml.

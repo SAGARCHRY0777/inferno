@@ -25,6 +25,22 @@ spec:
             - { name: INFERNO_WORKER__MODEL_NAME, value: "dummy-echo" }
           envFrom:
             - configMapRef: { name: inferno-config }
+          # Workers serve no HTTP -- the liveness signal is the mtime of the file
+          # the worker touches on every heartbeat (WorkerSettings.liveness_file).
+          # Readiness: the file only appears once the model is loaded and warmed
+          # up, so a rollout waits for a genuinely useful worker.
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) else 1)"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60          # allow up to ~10 min for a cold model download
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 120 else 1)"]
+            initialDelaySeconds: 120      # never race the initial model load
+            periodSeconds: 30
+            failureThreshold: 3
           resources:
             requests: { cpu: "100m", memory: "128Mi" }
             limits: { cpu: "500m", memory: "256Mi" }
@@ -47,6 +63,22 @@ spec:
             - { name: INFERNO_WORKER__MODEL_NAME, value: "distilbert-sentiment" }
           envFrom:
             - configMapRef: { name: inferno-config }
+          # Workers serve no HTTP -- the liveness signal is the mtime of the file
+          # the worker touches on every heartbeat (WorkerSettings.liveness_file).
+          # Readiness: the file only appears once the model is loaded and warmed
+          # up, so a rollout waits for a genuinely useful worker.
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) else 1)"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60          # allow up to ~10 min for a cold model download
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 120 else 1)"]
+            initialDelaySeconds: 120      # never race the initial model load
+            periodSeconds: 30
+            failureThreshold: 3
           resources:
             requests: { cpu: "500m", memory: "1Gi" }
             limits: { cpu: "2", memory: "4Gi" }
@@ -73,6 +105,22 @@ spec:
             - { name: INFERNO_WORKER__MODEL_NAME, value: "resnet-image" }
           envFrom:
             - configMapRef: { name: inferno-config }
+          # Workers serve no HTTP -- the liveness signal is the mtime of the file
+          # the worker touches on every heartbeat (WorkerSettings.liveness_file).
+          # Readiness: the file only appears once the model is loaded and warmed
+          # up, so a rollout waits for a genuinely useful worker.
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) else 1)"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60          # allow up to ~10 min for a cold model download
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 120 else 1)"]
+            initialDelaySeconds: 120      # never race the initial model load
+            periodSeconds: 30
+            failureThreshold: 3
           resources:
             requests: { cpu: "500m", memory: "1Gi" }
             limits: { cpu: "2", memory: "4Gi" }
@@ -100,6 +148,22 @@ spec:
             - { name: YOLO_CONFIG_DIR, value: "/models/ultralytics" }
           envFrom:
             - configMapRef: { name: inferno-config }
+          # Workers serve no HTTP -- the liveness signal is the mtime of the file
+          # the worker touches on every heartbeat (WorkerSettings.liveness_file).
+          # Readiness: the file only appears once the model is loaded and warmed
+          # up, so a rollout waits for a genuinely useful worker.
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) else 1)"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60          # allow up to ~10 min for a cold model download
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 120 else 1)"]
+            initialDelaySeconds: 120      # never race the initial model load
+            periodSeconds: 30
+            failureThreshold: 3
           resources:
             requests: { cpu: "750m", memory: "1.5Gi" }
             limits: { cpu: "2", memory: "4Gi" }
@@ -126,6 +190,22 @@ spec:
             - { name: INFERNO_WORKER__MODEL_NAME, value: "whisper-transcribe" }
           envFrom:
             - configMapRef: { name: inferno-config }
+          # Workers serve no HTTP -- the liveness signal is the mtime of the file
+          # the worker touches on every heartbeat (WorkerSettings.liveness_file).
+          # Readiness: the file only appears once the model is loaded and warmed
+          # up, so a rollout waits for a genuinely useful worker.
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) else 1)"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60          # allow up to ~10 min for a cold model download
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 120 else 1)"]
+            initialDelaySeconds: 120      # never race the initial model load
+            periodSeconds: 30
+            failureThreshold: 3
           resources:
             requests: { cpu: "750m", memory: "1.5Gi" }
             limits: { cpu: "2", memory: "4Gi" }
@@ -152,6 +232,63 @@ spec:
             - { name: INFERNO_WORKER__MODEL_NAME, value: "rag-search" }
           envFrom:
             - configMapRef: { name: inferno-config }
+          # Workers serve no HTTP -- the liveness signal is the mtime of the file
+          # the worker touches on every heartbeat (WorkerSettings.liveness_file).
+          # Readiness: the file only appears once the model is loaded and warmed
+          # up, so a rollout waits for a genuinely useful worker.
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) else 1)"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60          # allow up to ~10 min for a cold model download
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 120 else 1)"]
+            initialDelaySeconds: 120      # never race the initial model load
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests: { cpu: "500m", memory: "1Gi" }
+            limits: { cpu: "2", memory: "4Gi" }
+          volumeMounts:
+            - { name: model-cache, mountPath: /models }
+      volumes:
+        - { name: model-cache, emptyDir: {} }
+---
+# --- semantic-search (embeddings + cosine search) ---------------------------- #
+# Declared in backend/models/models.yaml, so GET /models advertises it and the UI
+# offers it. Without this Deployment nothing consumes inferno:jobs:semantic-search
+# and every such job hangs until the client's 30s timeout.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker-semantic, namespace: inferno, labels: { app: worker, model: semantic-search } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: worker, model: semantic-search } }
+  template:
+    metadata: { labels: { app: worker, model: semantic-search } }
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/sagarchry0777/inferno:latest
+          command: ["python", "-m", "backend.worker.main"]
+          env:
+            - { name: INFERNO_WORKER__MODEL_NAME, value: "semantic-search" }
+          envFrom:
+            - configMapRef: { name: inferno-config }
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) else 1)"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; p=os.environ.get('INFERNO_WORKER__LIVENESS_FILE','/tmp/inferno-worker-alive'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 120 else 1)"]
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            failureThreshold: 3
           resources:
             requests: { cpu: "500m", memory: "1Gi" }
             limits: { cpu: "2", memory: "4Gi" }

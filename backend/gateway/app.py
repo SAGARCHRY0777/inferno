@@ -8,6 +8,7 @@ so scaling it is just running more copies behind a load balancer.
 
 from __future__ import annotations
 
+import inspect
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -79,11 +80,24 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        await result_router.stop()
-        await hub.stop()
-        await broker.aclose()
-        await aclose_redis()
-        close_sync_redis()
+        # Each teardown step is isolated. Redis is frequently torn down *before*
+        # the gateway (docker compose down, a node drain that evicts the Redis
+        # pod first), which makes ResultRouter.stop()'s punsubscribe raise — and
+        # an unguarded chain would then skip hub.stop(), broker.aclose() and both
+        # connection-pool closes, leaking sockets on every restart.
+        for label, teardown in (
+            ("result_router", result_router.stop),
+            ("metrics_hub", hub.stop),
+            ("broker", broker.aclose),
+            ("async_redis", aclose_redis),
+            ("sync_redis", close_sync_redis),
+        ):
+            try:
+                outcome = teardown()
+                if inspect.isawaitable(outcome):
+                    await outcome
+            except Exception as exc:  # noqa: BLE001 - shutdown must always continue
+                _log.warning("shutdown_step_failed", step=label, error=str(exc))
         _log.info("gateway_stopped")
 
 

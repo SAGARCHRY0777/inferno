@@ -168,6 +168,8 @@ export function FleetMap() {
   // A -> B route planner state.
   const [planMode, setPlanMode] = useState(false);
   const [picks, setPicks] = useState<LatLng[]>([]);
+  // Monotonic id for in-flight route requests; only the newest may apply.
+  const routeSeq = useRef(0);
   const [planned, setPlanned] = useState<LatLng[] | null>(null);
   const [planStatus, setPlanStatus] = useState<"idle" | "planning" | "failed">("idle");
 
@@ -250,7 +252,12 @@ export function FleetMap() {
     setPlanStatus("idle");
     if (next.length === 2) {
       setPlanStatus("planning");
+      // Sequence guard: OSRM can take up to 8s, so picking a new pair while a
+      // request is in flight would let the older, slower response resolve last
+      // and overwrite the map with a stale route.
+      const seq = ++routeSeq.current;
       void planRoute(next[0], next[1]).then((road) => {
+        if (seq !== routeSeq.current) return; // superseded by a newer pick
         // Fall back to a straight line so the planner never hangs or breaks.
         setPlanned(road ?? next);
         setPlanStatus(road ? "idle" : "failed");

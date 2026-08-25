@@ -1,6 +1,0 @@
-[Inferno] Worker starting for model "distilbert-sentiment"  (Ctrl+C to drain + exit)
-2026-06-06 01:49:20 [info     ] model_specs_loaded             component=registry count=3 names=['dummy-echo', 'resnet-image', 'distilbert-sentiment'] service=worker
-{"component": "model.runtime", "device": "cpu", "event": "device_auto_selected", "service": "worker", "level": "info", "timestamp": "2026-06-05T20:19:38.067368Z"}
-{"component": "model.distilbert", "model_id": "distilbert-base-uncased-finetuned-sst-2-english", "device": "cpu", "labels": ["NEGATIVE", "POSITIVE"], "event": "distilbert_loaded", "service": "worker", "level": "info", "timestamp": "2026-06-05T20:19:40.692795Z"}
-{"component": "worker", "worker_id": "worker-DESKTOP-LI412IE-16908-cabc4d", "model_name": "distilbert-sentiment", "event": "worker_ready", "service": "worker", "level": "info", "timestamp": "2026-06-05T20:19:40.874802Z"}
-{"component": "worker", "worker_id": "worker-DESKTOP-LI412IE-16908-cabc4d", "model_name": "distilbert-sentiment", "jobs_processed": 0, "event": "worker_drained", "service": "worker", "level": "info", "timestamp": "2026-06-05T20:21:16.622342Z"}

@@ -27,6 +27,18 @@ def job_stream(model_name: str) -> str:
     return _join(C.STREAM_SEGMENT, model_name)
 
 
+def dead_letter_stream(model_name: str) -> str:
+    """Stream holding entries that could not be processed and were given up on.
+
+    An entry lands here when it is undecodable, or when it has been delivered
+    more than ``timeouts.max_deliveries`` times (a payload that kills the worker
+    process rather than raising). Parking it keeps the live lane draining while
+    preserving the evidence for debugging.
+    """
+
+    return _join(C.STREAM_SEGMENT, model_name, "dead")
+
+
 def result_channel(job_id: UUID | str) -> str:
     """Pub/Sub channel carrying the result for a single job."""
 

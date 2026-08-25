@@ -57,7 +57,11 @@ async def aclose() -> None:
 
     if get_async_redis.cache_info().currsize:
         client = get_async_redis()
-        await client.aclose()
+        # close_connection_pool=True is required here. redis-py sets
+        # auto_close_connection_pool=False whenever the pool is passed in (which
+        # get_async_redis does), so a bare aclose() is a no-op and would leak the
+        # pool's open sockets when cache_clear() drops the last reference.
+        await client.aclose(close_connection_pool=True)
         get_async_redis.cache_clear()
 
 

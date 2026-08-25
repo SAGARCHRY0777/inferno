@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 
-import { endpoints } from "@/config";
+import { authHeaders, endpoints } from "@/config";
 import { fmtMs, shortId } from "@/lib/format";
 import { useStore } from "@/store/useStore";
 import type { HistoryRecord } from "@/types";
@@ -12,7 +12,9 @@ function download(name: string, data: string, type: string) {
   a.href = url;
   a.download = name;
   a.click();
-  URL.revokeObjectURL(url);
+  // The download is dispatched asynchronously; revoking in the same tick races
+  // it and yields an empty file in Firefox. Defer to the next macrotask.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function toCsv(rows: HistoryRecord[]): string {
@@ -47,10 +49,16 @@ export function HistoryModal() {
 
   useEffect(() => {
     if (!open) return;
-    fetch(endpoints.history(500))
+    // Abort on close so a slow 500-record fetch from a previous open can't land
+    // after a newer one and clobber it (or set state on an unmounted modal).
+    const ac = new AbortController();
+    fetch(endpoints.history(500), { headers: authHeaders(), signal: ac.signal })
       .then((r) => r.json())
       .then(setRecords)
-      .catch(() => setRecords([]));
+      .catch((e: unknown) => {
+        if ((e as Error)?.name !== "AbortError") setRecords([]);
+      });
+    return () => ac.abort();
   }, [open]);
 
   useEffect(() => {

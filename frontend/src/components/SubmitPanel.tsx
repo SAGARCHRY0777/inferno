@@ -38,13 +38,23 @@ export function SubmitPanel() {
   // result overlay reuses the image URL, so we never revoke the one still shown.
   const resultImageRef = useRef<string | null>(null);
   resultImageRef.current = resultImage;
+  // Mirror the live blob URLs into refs so the unmount cleanup can revoke the
+  // *current* ones. The previous version read `image`/`audio` directly from an
+  // effect with `[]` deps, which captured their first-render values (both null),
+  // making every guard permanently false — the cleanup revoked nothing at all.
+  const imageUrlRef = useRef<string | null>(null);
+  imageUrlRef.current = image?.url ?? null;
+  const audioUrlRef = useRef<string | null>(null);
+  audioUrlRef.current = audio?.url ?? null;
   useEffect(() => {
     return () => {
-      if (image) URL.revokeObjectURL(image.url);
-      if (audio) URL.revokeObjectURL(audio.url);
-      if (resultImage && resultImage !== image?.url) URL.revokeObjectURL(resultImage);
+      const img = imageUrlRef.current;
+      const aud = audioUrlRef.current;
+      const shown = resultImageRef.current;
+      if (img) URL.revokeObjectURL(img);
+      if (aud) URL.revokeObjectURL(aud);
+      if (shown && shown !== img) URL.revokeObjectURL(shown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function onFile(file: File) {
@@ -97,13 +107,21 @@ export function SubmitPanel() {
     }
 
     setBusy(true);
-    const outcome = await submit({ modelName: model.name, inputType: kind, payload, preview });
-    setBusy(false);
-    if (outcome.ok && outcome.jobId) {
-      setActiveJobId(outcome.jobId);
-      setResultImage(kind === "image" && image ? image.url : null); // keep image for box overlay
-    } else {
-      setNotice(outcome.retryAfter ? `${outcome.error} — retry in ${outcome.retryAfter}s` : outcome.error ?? "failed");
+    try {
+      const outcome = await submit({ modelName: model.name, inputType: kind, payload, preview });
+      if (outcome.ok && outcome.jobId) {
+        setActiveJobId(outcome.jobId);
+        setResultImage(kind === "image" && image ? image.url : null); // keep image for box overlay
+      } else {
+        setNotice(outcome.retryAfter ? `${outcome.error} — retry in ${outcome.retryAfter}s` : outcome.error ?? "failed");
+      }
+    } catch (e: unknown) {
+      // Without this the button stays disabled on "Submitting…" until a page
+      // reload: submit() can throw (bad VITE_WS_BASE makes the WebSocket
+      // constructor throw synchronously, a truncated 202 body breaks .json()).
+      setNotice((e as Error)?.message ?? "submit failed");
+    } finally {
+      setBusy(false);
     }
   }
 

@@ -1,5 +1,0 @@
-2026-06-06 16:16:22 [info     ] model_specs_loaded             component=registry count=6 names=['dummy-echo', 'resnet-image', 'distilbert-sentiment', 'yolo-detect', 'whisper-transcribe', 'semantic-search'] service=worker
-2026-06-06T10:46:25.751086Z [info     ] worker_ready                   component=worker model_name=dummy-echo service=worker worker_id=worker-DESKTOP-LI412IE-22708-39733c
-2026-06-06 16:17:00 [debug    ] window_closed                  batch_size=6 component=batcher full=False model_name=dummy-echo service=worker
-2026-06-06T10:47:00.164565Z [info     ] batch_processed                batch_size=6 component=worker errors=0 model_name=dummy-echo service=worker total=6 worker_id=worker-DESKTOP-LI412IE-22708-39733c
-2026-06-06T10:48:41.615001Z [warning  ] redis_error_retrying           component=worker error=Error while reading from localhost:6379 : (10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None) model_name=dummy-echo service=worker worker_id=worker-DESKTOP-LI412IE-22708-39733c

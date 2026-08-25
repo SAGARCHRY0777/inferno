@@ -103,17 +103,61 @@ class TimeoutSettings(BaseModel):
         description="If no result within this window the job is failed as timeout.",
     )
     reclaim_min_idle_ms: int = Field(
-        default=30_000, ge=0,
-        description="Pending entries idle longer than this are reclaimed by a worker.",
+        default=90_000, ge=0,
+        description=(
+            "Pending entries idle longer than this are reclaimed by another worker. "
+            "'Idle' means time since DELIVERY, not time since the owner died, so this "
+            "must exceed the slowest realistic batch or a healthy worker's in-flight "
+            "batch gets stolen and executed twice."
+        ),
     )
     reclaim_interval_s: float = Field(
         default=15.0, gt=0,
         description="How often a worker sweeps for reclaimable stale entries.",
     )
+    max_deliveries: int = Field(
+        default=3, ge=1,
+        description=(
+            "How many times an entry may be delivered before it is dead-lettered. "
+            "Bounds the blast radius of a payload that kills the worker process "
+            "(which run_batch's exception handling cannot catch)."
+        ),
+    )
+    inference_timeout_s: float = Field(
+        default=120.0, gt=0,
+        description=(
+            "Watchdog for a single batched forward pass. A wedged model (CUDA "
+            "deadlock, stalled weight read) otherwise hangs the worker forever: it "
+            "never publishes, never acks and never heartbeats again."
+        ),
+    )
     result_ttl_s: int = Field(
-        default=60, ge=1,
+        default=300, ge=1,
         description="TTL for the late-join-safe result value key (>= job_timeout_s).",
     )
+
+    @model_validator(mode="after")
+    def _check_deadlines(self) -> TimeoutSettings:
+        """Enforce the deadline invariant the field docs already promised.
+
+        ``result_ttl_s >= job_timeout_s`` was documented but unvalidated, so
+        raising ``job_timeout_s`` alone made the result key expire *before* the
+        client's deadline — a successfully computed result the client could no
+        longer late-join to.
+
+        Note that ``reclaim_min_idle_ms`` is deliberately *larger* than
+        ``job_timeout_s``: you cannot safely conclude a worker is dead until well
+        past the slowest batch, so reclaim protects queue durability (the job is
+        recomputed and cached for a late-joining client), not the original
+        socket, which will already have timed out.
+        """
+
+        if self.result_ttl_s < self.job_timeout_s:
+            raise ValueError(
+                "timeouts.result_ttl_s must be >= timeouts.job_timeout_s "
+                f"(got {self.result_ttl_s} < {self.job_timeout_s})"
+            )
+        return self
 
 
 class ServerSettings(BaseModel):
@@ -166,6 +210,16 @@ class WorkerSettings(BaseModel):
         default=6, ge=1,
         description="Heartbeat key TTL; if a worker dies its presence expires.",
     )
+    liveness_file: str = Field(
+        default="/tmp/inferno-worker-alive",  # noqa: S108 - container-local, non-secret
+        description=(
+            "Touched on every heartbeat so an orchestrator can probe worker liveness. "
+            "A worker serves no HTTP, so there is nothing for an httpGet probe to hit; "
+            "the file's mtime is the signal (see the exec probes in k8s/workers.yaml). "
+            "It is first written only after the model has loaded and warmed up, so it "
+            "doubles as a readiness signal. Set to \"\" to disable."
+        ),
+    )
 
 
 class ModelSettings(BaseModel):
@@ -201,6 +255,15 @@ class RateLimitSettings(BaseModel):
         default=120, ge=1, description="Max requests per client per window."
     )
     window_s: int = Field(default=60, ge=1, description="Quota window length in seconds.")
+    trust_proxy_headers: bool = Field(
+        default=False,
+        description=(
+            "Read the caller IP from X-Forwarded-For / X-Real-IP instead of the socket "
+            "peer. Enable ONLY when a proxy you control sets those headers (nginx, k8s "
+            "ingress, Render/Fly). Without it, every request behind a proxy shares one "
+            "quota bucket; with it on an unproxied gateway, clients can spoof the header."
+        ),
+    )
 
 
 class HistorySettings(BaseModel):

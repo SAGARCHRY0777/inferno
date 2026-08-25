@@ -1,6 +1,0 @@
-HTTP Request: POST http://127.0.0.1:8000/api/v1/infer "HTTP/1.1 202 Accepted"
-2026-06-06 17:27:53 [info     ] chat_model_loading             component=chat.engine device=cpu model_id=Qwen/Qwen2.5-0.5B-Instruct
-Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
-2026-06-06 17:31:46 [info     ] chat_model_loaded              component=chat.engine device=cpu model_id=Qwen/Qwen2.5-0.5B-Instruct
-HTTP Request: POST http://127.0.0.1:8000/api/v1/infer "HTTP/1.1 202 Accepted"
-HTTP Request: POST http://127.0.0.1:8000/api/v1/infer "HTTP/1.1 202 Accepted"

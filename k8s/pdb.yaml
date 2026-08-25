@@ -1,0 +1,41 @@
+# PodDisruptionBudgets — what makes the graceful-drain design actually hold.
+#
+# The whole result path is a long-lived WebSocket, and both the gateway and the
+# frontend run replicas: 2. Without a PDB a single `kubectl drain` (node upgrade,
+# autoscaler scale-down, spot reclaim) can evict BOTH gateway pods at once,
+# dropping every in-flight result and metrics socket simultaneously — the exact
+# failure the SIGTERM drain was written to avoid.
+#
+# minAvailable: 1 keeps one replica serving through any voluntary disruption.
+# Workers get maxUnavailable: 1 instead: they are independently scaled and losing
+# one only pauses a lane briefly (its entries stay pending and are reclaimed),
+# so pinning a minimum would block node drains on a large fleet.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway
+  namespace: inferno
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: gateway }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend
+  namespace: inferno
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: frontend }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: workers
+  namespace: inferno
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: { app: worker }

@@ -12,6 +12,7 @@ resources:
   - chat.yaml
   - frontend.yaml
   - ingress.yaml
+  - pdb.yaml
 
 # Queue-depth autoscalers are intentionally NOT included here — they require KEDA
 # in the cluster. Install KEDA, then apply them separately:

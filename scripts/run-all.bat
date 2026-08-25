@@ -32,6 +32,10 @@ start "Inferno Worker whisper" cmd /k "%HERE%run-worker.bat whisper-transcribe"
 timeout /t 2 >nul
 start "Inferno Worker rag" cmd /k "%HERE%run-worker.bat rag-search"
 timeout /t 2 >nul
+REM semantic-search is declared in backend\models\models.yaml, so the UI offers
+REM it; without a worker those jobs hang until the client timeout.
+start "Inferno Worker semantic" cmd /k "%HERE%run-worker.bat semantic-search"
+timeout /t 2 >nul
 
 echo [Inferno] Launching Chat service (local LLM; first run downloads the model)...
 start "Inferno Chat" cmd /k "%HERE%run-chat.bat"

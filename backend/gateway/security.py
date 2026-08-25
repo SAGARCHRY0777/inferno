@@ -13,6 +13,8 @@ Both are **off by default** so local dev just works; enable them via
 
 from __future__ import annotations
 
+import hashlib
+
 import redis.asyncio as aredis
 from fastapi import Request
 
@@ -25,6 +27,31 @@ from backend.core.timing import now
 _log = get_logger("security")
 
 
+def _peer_ip(request: Request) -> str:
+    """Best-effort caller IP, honouring a trusted reverse proxy's headers.
+
+    Every deployment in this repo puts nginx (``frontend/nginx.conf``) or a
+    platform LB in front of the gateway, so ``request.client.host`` is the proxy's
+    IP for *every* request — which would collapse all callers into one quota
+    bucket. Prefer ``X-Forwarded-For``'s left-most entry (the original client),
+    falling back to ``X-Real-IP`` and then the socket peer.
+
+    Only consulted when ``ratelimit.trust_proxy_headers`` is on, since these
+    headers are client-supplied and trivially spoofed when nothing strips them.
+    """
+
+    if get_settings().ratelimit.trust_proxy_headers:
+        fwd = request.headers.get("x-forwarded-for")
+        if fwd:
+            first = fwd.split(",")[0].strip()
+            if first:
+                return first
+        real = request.headers.get("x-real-ip")
+        if real and real.strip():
+            return real.strip()
+    return request.client.host if request.client else "anonymous"
+
+
 def identify_client(request: Request) -> str:
     """Authenticate (if enabled) and return a stable client id for quotas.
 
@@ -35,14 +62,16 @@ def identify_client(request: Request) -> str:
     auth = get_settings().auth
     if not auth.enabled:
         # No auth -> key requests by source IP so quotas still apply per-caller.
-        return request.client.host if request.client else "anonymous"
+        return _peer_ip(request)
 
     key = request.headers.get(auth.header_name)
     if not key or key not in set(auth.api_keys):
         _log.warning("auth_rejected", has_key=bool(key))
         raise UnauthorizedError("missing or invalid API key")
-    # Identify by a short prefix so logs/quotas don't leak the full secret.
-    return f"key:{key[:8]}"
+    # Identify by a salted digest, not a raw prefix: two keys sharing the first
+    # 8 chars (common with prefixed formats like ``sk_live_...``) would otherwise
+    # share one quota bucket. The digest never leaks the secret into logs/keys.
+    return f"key:{hashlib.sha256(key.encode()).hexdigest()[:16]}"
 
 
 class RateLimiter:

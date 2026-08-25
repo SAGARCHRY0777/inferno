@@ -400,7 +400,7 @@ inferno/
 ├─ frontend/       Vite + React + TS + Tailwind + Framer Motion + Recharts + Zustand
 ├─ scripts/        install-*.bat · run-*.bat · fetch-redis.ps1 · loadgen · screenshot
 ├─ loadtest/       locustfile.py
-├─ .github/workflows/ci.yml   lint · pytest · ML · frontend build · docker→GHCR
+├─ .github/workflows/ci.yml   lint · pytest · ML · frontend build · docker builds
 ├─ requirements*.txt · pyproject.toml · .env.example
 ├─ docker-compose.yml · Dockerfile · Makefile
 ```
@@ -409,13 +409,20 @@ inferno/
 
 ## What I'd do next
 
-- **Autoscaling workers** off queue depth (KEDA on Redis stream length).
+Already shipped since this list was written: **KEDA queue-depth autoscaling**
+([`k8s/autoscaling-keda.yaml`](k8s/autoscaling-keda.yaml)), **Kubernetes manifests
++ HPA** ([`k8s/`](k8s/)), **API-key auth + per-client quotas**
+([`backend/gateway/security.py`](backend/gateway/security.py)) and **OpenTelemetry
+tracing** ([`backend/core/tracing.py`](backend/core/tracing.py)).
+
+Still open:
+
 - **Model warm pools** + readiness gating so a cold model never serves a slow first batch.
 - **A/B & canary model routing** by request header or weighted lane.
-- **Auth** (API keys / OIDC) on submit + per-tenant quotas feeding backpressure.
-- **Kubernetes** manifests + HPA; GHCR images already built by CI.
 - **Priority lanes** (the `priority` field is plumbed through; today it's FIFO).
-- **Tracing** (OpenTelemetry spans across gateway → broker → worker).
+- **OIDC** as an alternative to API keys, with per-tenant quotas feeding backpressure.
+- **Pushing images to a registry from CI** (today CI only proves they build).
+- **Container/pod hardening** — non-root `USER`, `securityContext`, PodDisruptionBudgets.
 
 ---
 

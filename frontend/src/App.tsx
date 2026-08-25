@@ -15,7 +15,7 @@ import { Aurora } from "@/components/fx/Aurora";
 import { CustomCursor } from "@/components/fx/CustomCursor";
 import { Grain } from "@/components/fx/Grain";
 import { Marquee } from "@/components/fx/Marquee";
-import { endpoints } from "@/config";
+import { authHeaders, endpoints } from "@/config";
 import { useMetricsStream } from "@/hooks/useMetricsStream";
 import { useStore } from "@/store/useStore";
 import { THEMES } from "@/theme/themes";
@@ -43,7 +43,9 @@ export default function App() {
       .then((m: ModelInfo[]) => setModels(m))
       .catch(() => pushToast("error", "Couldn't load models — is the gateway up?"));
 
-    fetch(endpoints.history(40))
+    // /history is authenticated on the same terms as /infer (it exposes
+    // input_preview), so the key must be attached here too.
+    fetch(endpoints.history(40), { headers: authHeaders() })
       .then((r) => r.json())
       .then((records: HistoryRecord[]) => {
         const jobs: TrackedJob[] = records.map((rec) => ({

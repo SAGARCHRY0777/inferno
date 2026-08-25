@@ -10,6 +10,14 @@ WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+# Must be set (to an empty string), not left unset. config.ts uses
+# `import.meta.env.VITE_CHAT_URL ?? "http://127.0.0.1:8100"`, and `??` only falls
+# back on undefined — so an unset var bakes the localhost URL into a bundle
+# served over HTTPS, which the browser blocks as mixed content. An empty string
+# yields a relative /chat instead, which fails cleanly as a 404 (this demo image
+# ships no chat service) and shows the UI's "chat unavailable" notice.
+ARG VITE_CHAT_URL=""
+ENV VITE_CHAT_URL=$VITE_CHAT_URL
 RUN npm run build
 
 # 2) Runtime: python + an in-container Redis + the app.

@@ -20,6 +20,7 @@ Design decisions (documented in README's "decisions" section):
 from __future__ import annotations
 
 import asyncio
+import json
 
 import redis
 import redis.asyncio as aredis
@@ -128,7 +129,7 @@ class RedisWorkerBroker(WorkerBroker):
             count=1,
             block=block_ms,
         )
-        entries = self._flatten(resp)
+        entries = self._flatten(resp, model_name)
         return entries[0] if entries else None
 
     def read_more(
@@ -143,10 +144,35 @@ class RedisWorkerBroker(WorkerBroker):
             count=count,
             block=None,  # non-blocking: return whatever is available right now
         )
-        return self._flatten(resp)
+        return self._flatten(resp, model_name)
 
-    @staticmethod
-    def _flatten(resp) -> list[ConsumedEntry]:
+    def _dead_letter(self, model_name: str, entry_id: str, fields, reason: str) -> None:
+        """Park an unprocessable entry, then ack+delete it from the live lane.
+
+        Acking is the whole point: without it the entry stays in the PEL forever,
+        every reclaim sweep re-claims it, XLEN never falls, and once enough of
+        them accumulate the lane's queue depth crosses ``high_watermark`` and the
+        gateway 429s that model permanently with no way to recover.
+        """
+
+        try:
+            payload = {
+                "reason": reason,
+                "entry_id": str(entry_id),
+                # Preserve whatever we got so the entry can be inspected later.
+                "fields": json.dumps(
+                    {str(k): str(v) for k, v in (fields or {}).items()}, default=str
+                ),
+            }
+            pipe = self._client.pipeline(transaction=False)
+            pipe.xadd(keys.dead_letter_stream(model_name), payload, maxlen=1_000, approximate=True)
+            pipe.xack(keys.job_stream(model_name), self._group, entry_id)
+            pipe.xdel(keys.job_stream(model_name), entry_id)
+            pipe.execute()
+        except Exception as exc:  # noqa: BLE001 - never let cleanup kill the lane
+            _log.error("dead_letter_failed", entry_id=entry_id, error=str(exc))
+
+    def _flatten(self, resp, model_name: str) -> list[ConsumedEntry]:
         """Normalize XREADGROUP's [[stream, [(id, {fields}), ...]]] shape."""
 
         out: list[ConsumedEntry] = []
@@ -157,8 +183,10 @@ class RedisWorkerBroker(WorkerBroker):
                 try:
                     out.append((entry_id, _decode_job(fields)))
                 except (KeyError, ValueError) as exc:
-                    # A corrupt entry must not stall the lane; ack it away.
+                    # A corrupt entry must not stall the lane -- and must not be
+                    # left pending either. Park it and ack it away.
                     _log.error("dropping_undecodable_entry", entry_id=entry_id, error=str(exc))
+                    self._dead_letter(model_name, entry_id, fields, f"undecodable: {exc}")
         return out
 
     def ack(self, model_name: str, entry_ids: list[str]) -> None:
@@ -189,7 +217,29 @@ class RedisWorkerBroker(WorkerBroker):
         pending = self._client.xpending_range(
             stream, self._group, min="-", max="+", count=count
         )
-        ids = [p["message_id"] for p in pending if p["time_since_delivered"] >= min_idle_ms]
+        max_deliveries = get_settings().timeouts.max_deliveries
+        ids: list[str] = []
+        for p in pending:
+            if p["time_since_delivered"] < min_idle_ms:
+                continue
+            # A payload that kills the *process* (segfault in onnxruntime, OOM
+            # kill) is never caught by run_batch's `except Exception`, so without
+            # a delivery cap one crafted job reclaim-loops the whole fleet
+            # forever. Park it after N attempts instead of handing it out again.
+            if p.get("times_delivered", 0) >= max_deliveries:
+                _log.error(
+                    "dead_lettering_poison_entry",
+                    entry_id=p["message_id"],
+                    times_delivered=p.get("times_delivered"),
+                )
+                self._dead_letter(
+                    model_name,
+                    p["message_id"],
+                    None,
+                    f"exceeded max_deliveries={max_deliveries}",
+                )
+                continue
+            ids.append(p["message_id"])
         if not ids:
             return []
         claimed = self._client.xclaim(
@@ -203,6 +253,7 @@ class RedisWorkerBroker(WorkerBroker):
                 out.append((entry_id, _decode_job(fields)))
             except (KeyError, ValueError) as exc:
                 _log.error("dropping_undecodable_reclaim", entry_id=entry_id, error=str(exc))
+                self._dead_letter(model_name, entry_id, fields, f"undecodable: {exc}")
         if out:
             _log.warning("reclaimed_stale_entries", model_name=model_name, count=len(out))
         return out

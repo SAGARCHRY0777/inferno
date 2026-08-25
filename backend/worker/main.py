@@ -36,6 +36,7 @@ from backend.models.registry import build_model
 from backend.worker.batcher import BatchWindow
 from backend.worker.lifecycle import GracefulShutdown
 from backend.worker.runner import BatchItem, run_batch
+from backend.worker.watchdog import InferenceWatchdog
 
 
 def _make_worker_id(prefix: str) -> str:
@@ -62,6 +63,9 @@ class Worker:
         self._last_batch_size = 0
         self._last_heartbeat = 0.0
         self._last_reclaim = 0.0
+        self._watchdog = InferenceWatchdog(
+            get_settings().timeouts.inference_timeout_s, worker_id=worker_id
+        )
 
     # -- public ------------------------------------------------------------- #
     def run(self) -> None:
@@ -72,10 +76,17 @@ class Worker:
         self._heartbeat(WorkerState.IDLE)
         self._log.info("worker_ready")
 
+        self._watchdog.start()
+
         try:
             self._loop()
         finally:
-            self._heartbeat(WorkerState.STOPPED)
+            self._watchdog.stop()
+            # force=True: the rate limiter would otherwise swallow this write
+            # (the last heartbeat is almost always < heartbeat_interval_s old on
+            # exit), leaving the key reading "running" until its TTL expires so
+            # /health and the dashboard count a dead worker as live for seconds.
+            self._heartbeat(WorkerState.STOPPED, force=True)
             self._log.info("worker_drained", jobs_processed=self._jobs_processed)
 
     # -- internals ---------------------------------------------------------- #
@@ -88,7 +99,10 @@ class Worker:
                     self._heartbeat(WorkerState.IDLE)
                     continue
                 self._process(items, window_closed_ts)
-                self._heartbeat(WorkerState.IDLE)
+                # force=True: _process just wrote a forced RUNNING heartbeat, so
+                # an unforced write here is always inside the rate-limit window
+                # and the RUNNING -> IDLE transition never reaches Redis.
+                self._heartbeat(WorkerState.IDLE, force=True)
             except redis.exceptions.RedisError as exc:
                 # Redis hiccup or restart -> don't crash. redis-py reconnects on
                 # the next command; back off briefly and retry the loop.
@@ -104,9 +118,15 @@ class Worker:
         ) as span:
             span.set_attribute("model_name", self._model_name)
             span.set_attribute("batch_size", len(items))
-            results = run_batch(
-                self._model, items, worker_id=self._worker_id, window_closed_ts=window_closed_ts
-            )
+            # Guarded: a forward pass that never returns would otherwise hang this
+            # worker forever (no publish, no ack, no heartbeat).
+            with self._watchdog.guard(batch_size=len(items)):
+                results = run_batch(
+                    self._model,
+                    items,
+                    worker_id=self._worker_id,
+                    window_closed_ts=window_closed_ts,
+                )
         # Publish results FIRST, then ack: a crash in between leaves the entries
         # pending (reclaimable) rather than acked-but-unpublished -> no lost work.
         for result in results:
@@ -159,11 +179,30 @@ class Worker:
             items = [BatchItem(eid, job, pickup_ts=pickup) for eid, job in claimed]
             self._process(items, window_closed_ts=pickup)
 
+    def _touch_liveness_file(self) -> None:
+        """Refresh the mtime an orchestrator's exec probe reads.
+
+        A worker exposes no HTTP port, so there is nothing for an ``httpGet``
+        probe to hit; without this a wedged worker is never restarted and a
+        rollout reports success the instant the container starts, long before the
+        model has finished loading.
+        """
+
+        path = get_settings().worker.liveness_file
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(self._worker_id)
+        except OSError as exc:  # a read-only /tmp must never kill the worker
+            self._log.warning("liveness_file_write_failed", path=path, error=str(exc))
+
     def _heartbeat(self, state: WorkerState, *, force: bool = False) -> None:
         w = get_settings().worker
         if not force and monotonic() - self._last_heartbeat < w.heartbeat_interval_s:
             return
         self._last_heartbeat = monotonic()
+        self._touch_liveness_file()
         cpu, ram = sysinfo.collect_cpu_ram()
         hb = WorkerHeartbeat(
             worker_id=self._worker_id,

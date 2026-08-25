@@ -20,7 +20,12 @@ services:
     # appendonly + a named volume => the queue survives restarts (durable broker).
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     ports:
-      - "6379:6379"
+      # Bound to loopback ONLY. Every service in this file reaches Redis over the
+      # compose network by service name, so this mapping exists purely for local
+      # tooling (redis-cli, the test suite). Published as "6379:6379" it binds
+      # 0.0.0.0, which on a cloud VM -- the DEPLOY.md "any Docker host" path --
+      # exposes an unauthenticated Redis to the internet.
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -127,6 +132,23 @@ services:
     environment:
       INFERNO_REDIS__URL: redis://redis:6379/0
       INFERNO_WORKER__MODEL_NAME: rag-search
+      INFERNO_INFERENCE__DEVICE: cpu
+      HF_HOME: /app/artifacts/hf
+    volumes:
+      - model-cache:/app/artifacts
+
+  # semantic-search is declared in backend/models/models.yaml, so GET /models
+  # advertises it and the UI offers it. Without this worker nothing ever consumes
+  # inferno:jobs:semantic-search and every such job hangs until the 30s timeout.
+  worker-semantic:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "backend.worker.main"]
+    environment:
+      INFERNO_REDIS__URL: redis://redis:6379/0
+      INFERNO_WORKER__MODEL_NAME: semantic-search
       INFERNO_INFERENCE__DEVICE: cpu
       HF_HOME: /app/artifacts/hf
     volumes:

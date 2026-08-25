@@ -41,13 +41,17 @@ frontend: ## Run the Vite dev server
 test: ## Run the pytest suite
 	$(PY) -m pytest backend/tests
 
+# NOTE: no `-` prefixes here. A leading `-` tells make to ignore the recipe's
+# exit status, so these targets used to exit 0 on a wall of violations -- or when
+# ruff/mypy weren't installed at all -- giving a false pass locally that only CI
+# would catch. Install the tools with: pip install -e ".[dev]"
 lint: ## Ruff lint (backend) + eslint (frontend)
-	-$(PY) -m ruff check backend
-	-cd frontend && npm run lint
+	$(PY) -m ruff check backend
+	cd frontend && npm run lint
 
 typecheck: ## mypy (backend) + tsc (frontend)
-	-$(PY) -m mypy backend
-	-cd frontend && npm run typecheck
+	$(PY) -m mypy backend
+	cd frontend && npm run typecheck
 
 loadtest: ## Ramp load with Locust (web UI on :8089)
 	locust -f loadtest/locustfile.py --host http://127.0.0.1:$(GATEWAY_PORT)

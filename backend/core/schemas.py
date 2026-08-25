@@ -13,10 +13,16 @@ import binascii
 from typing import Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.core.enums import InputType, JobStatus, ResultStatus, TaskType
 from backend.core.timing import now
+
+#: Hard ceiling on a single request's ``payload`` string, in characters.
+#: Base64 inflates by ~4/3, so this allows roughly a 9 MB image or audio clip.
+#: Enforced by Pydantic at the edge so an oversized body is rejected with 422
+#: before the gateway decodes (and therefore duplicates) it in memory.
+MAX_PAYLOAD_CHARS = 12_000_000
 
 
 class _Frozen(BaseModel):
@@ -33,9 +39,18 @@ class InferenceRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    model_name: str = Field(..., min_length=1, examples=["resnet-image"])
+    model_name: str = Field(..., min_length=1, max_length=128, examples=["resnet-image"])
     input_type: InputType
-    payload: str = Field(..., min_length=1, description="base64 image OR raw text")
+    # max_length is a hard memory guard, not a style choice: without it a single
+    # request can buffer an arbitrarily large string in the gateway and then
+    # allocate a second copy in b64decode below, OOM-killing a 512Mi pod.
+    # ~12 MB of base64 ≈ a 9 MB image/audio clip, well above any real payload.
+    payload: str = Field(
+        ...,
+        min_length=1,
+        max_length=MAX_PAYLOAD_CHARS,
+        description="base64 image/audio OR raw text",
+    )
     priority: int = Field(default=0, ge=0, le=9, description="Higher served sooner.")
 
     @model_validator(mode="after")
@@ -133,10 +148,19 @@ class InferenceResult(BaseModel):
     worker_id: str
     cached: bool = Field(default=False, description="True if served from the result cache.")
 
-    @field_validator("predictions")
-    @classmethod
-    def _no_predictions_on_error(cls, v: list[Prediction], info):  # type: ignore[no-untyped-def]
-        return v
+    @model_validator(mode="after")
+    def _no_predictions_on_error(self) -> InferenceResult:
+        """An errored result must not also carry predictions.
+
+        Previously a ``field_validator`` whose body was ``return v`` — it ran but
+        asserted nothing, so a malformed result claiming both ``status=error`` and
+        a list of predictions would round-trip and the UI would render the stale
+        predictions next to an error badge.
+        """
+
+        if self.status is ResultStatus.ERROR and self.predictions:
+            raise ValueError("predictions must be empty when status is 'error'")
+        return self
 
 
 # --------------------------------------------------------------------------- #

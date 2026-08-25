@@ -11,6 +11,12 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 spec:
+  # Required unless the cluster has an IngressClass marked
+  # ingressclass.kubernetes.io/is-default-class=true. Without it no controller
+  # claims this Ingress: `kubectl apply -k k8s/` reports success and nothing is
+  # ever routed. Change this if your controller is not ingress-nginx
+  # (`kubectl get ingressclass` lists what the cluster has).
+  ingressClassName: nginx
   rules:
     - host: inferno.local          # add to /etc/hosts -> ingress IP, or use your domain
       http:

@@ -32,7 +32,13 @@ class ResultRouter:
         self._client = client
         self._pubsub: aredis.client.PubSub | None = None
         self._task: asyncio.Task | None = None
-        self._waiters: dict[str, asyncio.Future[InferenceResult]] = {}
+        # A *set* of futures per job id, not a single future: two sockets can
+        # legitimately await the same job (the result link opened in two tabs, or
+        # a reconnect racing the old socket's teardown). Keying one future per id
+        # made the second registration silently evict the first, so that client
+        # blocked for the full job timeout on a job that had already succeeded.
+        self._waiters: dict[str, set[asyncio.Future[InferenceResult]]] = {}
+        self._shutting_down = False
 
     async def start(self) -> None:
         self._pubsub = self._client.pubsub()
@@ -41,6 +47,7 @@ class ResultRouter:
         _log.info("result_router_started")
 
     async def stop(self) -> None:
+        self._shutting_down = True
         if self._task is not None:
             self._task.cancel()
             try:
@@ -48,11 +55,21 @@ class ResultRouter:
             except asyncio.CancelledError:
                 pass
         if self._pubsub is not None:
-            await self._pubsub.punsubscribe(keys.result_channel_pattern())
-            await self._pubsub.aclose()
-        for fut in self._waiters.values():
-            if not fut.done():
-                fut.cancel()
+            # punsubscribe talks to a live socket; when Redis is already gone this
+            # raises, and an unguarded call here would skip aclose() and leave
+            # every waiter hanging instead of being cancelled below.
+            try:
+                await self._pubsub.punsubscribe(keys.result_channel_pattern())
+            except Exception as exc:  # noqa: BLE001 - shutdown must continue
+                _log.warning("result_router_punsubscribe_failed", error=str(exc))
+            try:
+                await self._pubsub.aclose()
+            except Exception as exc:  # noqa: BLE001 - shutdown must continue
+                _log.warning("result_router_pubsub_close_failed", error=str(exc))
+        for futures in self._waiters.values():
+            for fut in futures:
+                if not fut.done():
+                    fut.cancel()
         self._waiters.clear()
 
     async def wait(self, job_id: UUID, timeout: float) -> InferenceResult | None:
@@ -65,7 +82,7 @@ class ResultRouter:
         key = str(job_id)
         loop = asyncio.get_running_loop()
         future: asyncio.Future[InferenceResult] = loop.create_future()
-        self._waiters[key] = future
+        self._waiters.setdefault(key, set()).add(future)
         try:
             cached = await self._client.get(keys.result_value(job_id))
             if cached is not None:
@@ -73,8 +90,21 @@ class ResultRouter:
             return await asyncio.wait_for(future, timeout=timeout)
         except asyncio.TimeoutError:
             return None
+        except asyncio.CancelledError:
+            # stop() cancels every pending waiter on gateway shutdown. Without
+            # this, CancelledError escaped into Starlette's websocket handler and
+            # the client got a bare close with no `result` or `timeout` frame.
+            if self._shutting_down:
+                return None
+            raise
         finally:
-            self._waiters.pop(key, None)
+            # Discard only *this* waiter. Popping the whole key would deregister
+            # any sibling socket still waiting on the same job.
+            siblings = self._waiters.get(key)
+            if siblings is not None:
+                siblings.discard(future)
+                if not siblings:
+                    self._waiters.pop(key, None)
 
     async def _run(self) -> None:
         # Poll with a short timeout instead of an open-ended ``listen()``: the
@@ -100,10 +130,15 @@ class ResultRouter:
 
     def _dispatch(self, channel: str, data: str) -> None:
         job_id = keys.job_id_from_result_channel(channel)
-        future = self._waiters.get(job_id)
-        if future is None or future.done():
+        futures = self._waiters.get(job_id)
+        if not futures:
             return  # no one waiting (already served via cache, or client gone)
         try:
-            future.set_result(InferenceResult.model_validate_json(data))
+            result = InferenceResult.model_validate_json(data)
         except ValueError as exc:
             _log.error("result_decode_failed", job_id=job_id, error=str(exc))
+            return
+        # Decode once, then fan out to every socket awaiting this job.
+        for future in tuple(futures):
+            if not future.done():
+                future.set_result(result)
