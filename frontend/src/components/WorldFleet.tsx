@@ -3,12 +3,23 @@ import { useEffect, useRef, useState } from "react";
 import { Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 
 import { type Car, carDisplay, domainOf, flag, iconOf } from "@/lib/cars";
-import { makeWorldFleet, spawnAt, stepWorldVehicle, type WorldVehicle } from "@/lib/world";
+import {
+  isLocal,
+  makeWorldFleet,
+  spawnAt,
+  spawnLocal,
+  stepWorldVehicle,
+  type WorldVehicle,
+} from "@/lib/world";
 
 const TICK = 120;
 const TIME_SCALE = 26;
 const CAP = 240; // max markers rendered at once (keeps DOM/RAM flat at any zoom)
 const FLEET_SIZE = 1400;
+/** Below this many vehicles on screen, seed local traffic so the map is alive. */
+const MIN_IN_VIEW = 18;
+/** Ceiling on seeded local vehicles, so panning around can't grow the fleet forever. */
+const MAX_LOCAL = 400;
 
 export interface WorldApi {
   add: (car?: Car) => void;
@@ -83,14 +94,20 @@ export function WorldFleet({
 
   const cull = (step: boolean) => {
     const b = map.getBounds();
-    const padded = step ? b.pad(0.25) : b;
     const dt = (TICK / 1000) * TIME_SCALE;
     const arr = fleet.current;
     const vis: WorldVehicle[] = [];
     for (let i = 0; i < arr.length; i++) {
-      if (step && padded.contains(arr[i].pos as L.LatLngExpression)) {
-        arr[i] = stepWorldVehicle(arr[i], dt);
-      }
+      // Step EVERY vehicle, cull only what we RENDER.
+      //
+      // This used to step only vehicles already inside the padded viewport,
+      // which froze the entire world off-screen: a vehicle outside the view
+      // never moved, so none could ever drive INTO the view. You saw only
+      // whatever happened to spawn on screen at load — which at the default
+      // city zoom is usually nothing, hence a permanently empty "0 in view".
+      // Stepping is a few arithmetic ops; it is rendering 1400 markers that is
+      // expensive, and that is still capped at CAP below.
+      if (step) arr[i] = stepWorldVehicle(arr[i], dt);
       if (vis.length < CAP && b.contains(arr[i].pos as L.LatLngExpression)) vis.push(arr[i]);
     }
     setVisible(vis);
@@ -98,6 +115,38 @@ export function WorldFleet({
       lastCount.current = vis.length;
       onCounts(vis.length, arr.length);
     }
+    return vis.length;
+  };
+
+  /**
+   * Guarantee the map is never dead: if the view is nearly empty, seed short
+   * local trips around wherever the user is looking. Intercity routes between
+   * ~96 global endpoints simply do not pass through a zoom-13 city view often
+   * enough to carry the feature on their own.
+   */
+  const ensureLocalTraffic = () => {
+    const c = map.getCenter();
+    const b = map.getBounds();
+    // Roughly the visible radius, so trips stay in frame long enough to watch.
+    const spread = Math.max(0.01, Math.min(0.6, (b.getNorth() - b.getSouth()) / 2));
+    const arr = fleet.current;
+    const inView = arr.reduce(
+      (n, v) => (b.contains(v.pos as L.LatLngExpression) ? n + 1 : n),
+      0,
+    );
+    if (inView >= MIN_IN_VIEW) return;
+
+    for (let i = inView; i < MIN_IN_VIEW; i++) {
+      arr.push(spawnLocal([c.lat, c.lng], spread));
+    }
+    // Bound the growth from panning around: retire the oldest LOCAL vehicles
+    // first so the worldwide fleet itself is never culled.
+    const localCount = arr.reduce((n, v) => (isLocal(v) ? n + 1 : n), 0);
+    if (localCount > MAX_LOCAL) {
+      let toDrop = localCount - MAX_LOCAL;
+      fleet.current = arr.filter((v) => !(toDrop > 0 && isLocal(v) && toDrop--));
+    }
+    cull(false);
   };
 
   // expose add() to the parent (spawns near the current map center, in view)
@@ -112,11 +161,11 @@ export function WorldFleet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
 
-  // re-cull when the map moves (instant local traffic on pan/zoom)
-  useMapEvents({ moveend: () => cull(false), zoomend: () => cull(false) });
+  // re-cull when the map moves, and top up local traffic for the new view
+  useMapEvents({ moveend: () => ensureLocalTraffic(), zoomend: () => ensureLocalTraffic() });
   // initial population
   useEffect(() => {
-    cull(false);
+    ensureLocalTraffic();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

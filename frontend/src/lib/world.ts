@@ -231,8 +231,58 @@ export function makeWorldFleet(n: number): WorldVehicle[] {
 
 export function stepWorldVehicle(v: WorldVehicle, dt: number): WorldVehicle {
   const t = v.t + (v.speedDeg * dt) / v.legLen;
-  if (t >= 1) return startLeg({ ...v, to: v.to }); // arrived → next leg
+  if (t >= 1) {
+    // Local traffic keeps circulating locally. Without this it would take a
+    // normal intercity leg on arrival and immediately drive off the screen,
+    // leaving the view empty again a few seconds after it was seeded.
+    if (isLocal(v)) return { ...spawnLocal(v.to, 0.05), id: v.id, t: 0 };
+    return startLeg({ ...v, to: v.to }); // arrived → next leg
+  }
   return { ...v, t, pos: [v.from[0] + (v.to[0] - v.from[0]) * t, v.from[1] + (v.to[1] - v.from[1]) * t] };
+}
+
+/**
+ * Local traffic: a short hop entirely inside the current view.
+ *
+ * The worldwide fleet travels between ~96 global airports/ports/cities, so at a
+ * city zoom (the map opens at zoom 13) essentially none of those routes pass
+ * through your screen — you get an empty map with "0 in view". These vehicles
+ * drive short local legs around wherever you are looking, so the map always has
+ * something moving on it.
+ *
+ * `spreadDeg` should be roughly the visible radius, so trips stay in frame long
+ * enough to watch.
+ */
+export function spawnLocal(center: LatLng, spreadDeg = 0.05): WorldVehicle {
+  const jitter = (): LatLng => [
+    center[0] + (Math.random() - 0.5) * spreadDeg * 2,
+    center[1] + (Math.random() - 0.5) * spreadDeg * 2,
+  ];
+  const car = randomCarOf("road");
+  const from = jitter();
+  const to = jitter();
+  return {
+    id: `WL-${rnd(1e9)}`, // WL = local, so the culler can retire these first
+    car,
+    domain: "road",
+    from,
+    to,
+    fromName: "local",
+    toName: "local",
+    legLen: Math.max(0.004, degDist(from, to)),
+    t: Math.random(), // stagger so they don't all start from the same instant
+    pos: from,
+    heading: bearing(from, to),
+    // Local streets, not intercity: scale the catalogue speed right down so a
+    // short hop takes seconds rather than a single frame.
+    speedDeg: speedFor(car.type) * 0.06 * (0.7 + Math.random() * 0.6),
+    cargo: cargoFor(car),
+  };
+}
+
+/** True for a vehicle created by {@link spawnLocal}. */
+export function isLocal(v: WorldVehicle): boolean {
+  return v.id.startsWith("WL-");
 }
 
 export function spawnAt(center: LatLng, car?: Car): WorldVehicle {
