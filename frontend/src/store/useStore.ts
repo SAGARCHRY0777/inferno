@@ -39,8 +39,21 @@ interface AppState {
   fleetOpen: boolean;
   chatOpen: boolean;
   toasts: Toast[];
+  /**
+   * YOLO vehicle labels waiting to be spawned onto the Fleet map.
+   *
+   * This is the hand-off that connects the inference platform to Fleet Command:
+   * detect vehicles in a real photo, then watch those exact vehicles drive. The
+   * queue lives in the store because the detection happens in SubmitPanel while
+   * the spawning happens inside FleetMap's Leaflet context.
+   */
+  fleetSpawnQueue: string[];
 
   setChatOpen: (open: boolean) => void;
+  /** Queue detected vehicle labels (e.g. ["car","car","bus"]) for the Fleet map. */
+  queueFleetSpawns: (labels: string[]) => void;
+  /** Drain the queue — returns what was pending and clears it. */
+  takeFleetSpawns: () => string[];
   pushToast: (kind: ToastKind, message: string) => void;
   dismissToast: (id: number) => void;
   setSelectedJob: (id: string | null) => void;
@@ -59,7 +72,7 @@ interface AppState {
   setJobError: (jobId: string, error: string) => void;
 }
 
-export const useStore = create<AppState>((set) => ({
+export const useStore = create<AppState>((set, get) => ({
   models: [],
   metricsConnected: false,
   snapshot: null,
@@ -73,8 +86,18 @@ export const useStore = create<AppState>((set) => ({
   fleetOpen: false,
   chatOpen: false,
   toasts: [],
+  fleetSpawnQueue: [],
 
   setChatOpen: (chatOpen) => set({ chatOpen }),
+  queueFleetSpawns: (labels) =>
+    // Capped: a busy photo can contain dozens of vehicles, and each becomes a
+    // live marker. 60 is plenty to look convincing without flooding the map.
+    set((state) => ({ fleetSpawnQueue: [...state.fleetSpawnQueue, ...labels].slice(-60) })),
+  takeFleetSpawns: () => {
+    const pending = get().fleetSpawnQueue;
+    if (pending.length) set({ fleetSpawnQueue: [] });
+    return pending;
+  },
   pushToast: (kind, message) =>
     set((state) => ({ toasts: [...state.toasts, { id: ++_toastId, kind, message }].slice(-4) })),
   dismissToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
@@ -142,3 +165,11 @@ export const useStore = create<AppState>((set) => ({
       ),
     })),
 }));
+
+// Dev-only debug handle: lets you inspect and drive the store from the browser
+// console (and lets UI tests exercise store actions without a live backend).
+// `import.meta.env.DEV` is statically false in a production build, so bundlers
+// tree-shake this away entirely — it never ships.
+if (import.meta.env.DEV) {
+  (window as unknown as { __inferno_store?: typeof useStore }).__inferno_store = useStore;
+}

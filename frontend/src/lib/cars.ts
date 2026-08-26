@@ -416,3 +416,12 @@ export function randomCarOf(domain: Domain): Car {
   const list = BY_DOMAIN[domain];
   return list[Math.floor(Math.random() * list.length)] ?? randomCar();
 }
+
+/**
+ * A random road vehicle from one category — how a YOLO detection becomes a real
+ * fleet vehicle: YOLO says "bus", this returns an actual bus from the catalogue.
+ */
+export function randomCarOfCategory(category: string): Car {
+  const list = CARS.filter((c) => domainOf(c) === "road" && categoryOf(c) === category);
+  return list.length ? list[Math.floor(Math.random() * list.length)] : randomCarOf("road");
+}

@@ -1,0 +1,61 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# 🚀 Deploy to Render
+#
+# Render's own "Auto-Deploy: On Commit" relies on a GitHub webhook that has, in
+# practice, silently failed to fire on this service (commit 621f799 sat
+# undeployed for hours with the setting enabled). This workflow removes that
+# dependency: after CI passes on `main`, it calls Render's Deploy Hook directly,
+# so a deploy is triggered by something we can see, log and re-run.
+#
+# ONE-TIME SETUP
+#   1. Render Dashboard -> your service -> Settings -> Deploy Hook -> copy the URL.
+#   2. GitHub -> repo Settings -> Secrets and variables -> Actions -> New secret:
+#        Name:  RENDER_DEPLOY_HOOK
+#        Value: <the URL you copied>
+#   3. Leave Render's own Auto-Deploy ON as well — a double trigger is harmless
+#      (Render coalesces concurrent deploys of the same commit).
+#
+# Without the secret set, this workflow skips cleanly instead of failing red.
+# ─────────────────────────────────────────────────────────────────────────────
+name: 🚀 Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"] # only deploy commits whose CI actually passed
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: # manual "deploy now" button in the Actions tab
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-render
+  cancel-in-progress: false # never cancel a deploy midway
+
+jobs:
+  render:
+    name: Trigger Render deploy
+    runs-on: ubuntu-latest
+    # Deploy only when CI passed (or when a human pressed Run workflow).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Trigger deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HOOK:-}" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK is not set — skipping deploy."
+            echo "Add it under Settings → Secrets and variables → Actions (see this file's header)."
+            exit 0
+          fi
+          echo "Calling Render deploy hook…"
+          # -f makes curl exit non-zero on an HTTP error, so a rejected hook
+          # fails this job loudly instead of looking like a successful deploy.
+          code=$(curl -sS -f -w '%{http_code}' -o /tmp/render.out -X POST "$HOOK")
+          echo "Render responded HTTP $code"
+          cat /tmp/render.out || true
+          echo "Deploy queued. Watch it in the Render dashboard → Events."

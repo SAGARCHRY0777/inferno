@@ -56,6 +56,7 @@ class RedisAsyncBroker(AsyncBroker):
     async def ensure_topology(self, model_names: list[str]) -> None:
         for model in model_names:
             await self._ensure_group(keys.job_stream(model))
+            await self._ensure_group(keys.express_stream(model))
 
     async def _ensure_group(self, stream: str) -> None:
         try:
@@ -66,15 +67,29 @@ class RedisAsyncBroker(AsyncBroker):
 
     async def enqueue(self, job: Job) -> str:
         s = get_settings().queue
+        # Priority is routing, not sorting: Redis Streams are append-only FIFO,
+        # so a high-priority job goes onto a separate lane the workers drain
+        # first (see redis_keys.express_stream).
+        stream = (
+            keys.express_stream(job.model_name)
+            if job.priority >= s.express_priority_min
+            else keys.job_stream(job.model_name)
+        )
         return await self._client.xadd(
-            keys.job_stream(job.model_name),
+            stream,
             {C.FIELD_JOB: job.model_dump_json()},
             maxlen=s.max_stream_len,
             approximate=True,
         )
 
     async def queue_depth(self, model_name: str) -> int:
-        return int(await self._client.xlen(keys.job_stream(model_name)))
+        # Both lanes count toward backpressure — a flood of express jobs is still
+        # a saturated lane, and shedding must see it.
+        pipe = self._client.pipeline(transaction=False)
+        pipe.xlen(keys.job_stream(model_name))
+        pipe.xlen(keys.express_stream(model_name))
+        normal, express = await pipe.execute()
+        return int(normal) + int(express)
 
     async def total_queue_depth(self, model_names: list[str]) -> int:
         if not model_names:
@@ -112,12 +127,26 @@ class RedisWorkerBroker(WorkerBroker):
         self._group = get_settings().queue.consumer_group
 
     def ensure_topology(self, model_name: str) -> None:
-        stream = keys.job_stream(model_name)
-        try:
-            self._client.xgroup_create(stream, self._group, id="0", mkstream=True)
-        except redis.ResponseError as exc:
-            if _BUSYGROUP not in str(exc):
-                raise
+        for stream in (keys.express_stream(model_name), keys.job_stream(model_name)):
+            try:
+                self._client.xgroup_create(stream, self._group, id="0", mkstream=True)
+            except redis.ResponseError as exc:
+                if _BUSYGROUP not in str(exc):
+                    raise
+
+    def _lanes(self, model_name: str) -> dict[str, str]:
+        """Streams to read, **express first**.
+
+        XREADGROUP returns results grouped per stream in the order requested, so
+        listing express first is what actually delivers priority — in a single
+        round trip, and without starving the normal lane (both are read).
+        Python dicts preserve insertion order, which redis-py relies on here.
+        """
+
+        return {
+            keys.express_stream(model_name): _NEW_MESSAGES,
+            keys.job_stream(model_name): _NEW_MESSAGES,
+        }
 
     def read_first(
         self, model_name: str, consumer: str, *, block_ms: int
@@ -125,7 +154,7 @@ class RedisWorkerBroker(WorkerBroker):
         resp = self._client.xreadgroup(
             self._group,
             consumer,
-            {keys.job_stream(model_name): _NEW_MESSAGES},
+            self._lanes(model_name),
             count=1,
             block=block_ms,
         )
@@ -146,7 +175,30 @@ class RedisWorkerBroker(WorkerBroker):
         )
         return self._flatten(resp, model_name)
 
-    def _dead_letter(self, model_name: str, entry_id: str, fields, reason: str) -> None:
+    # -- lane-tagged entry ids ---------------------------------------------- #
+    # `ConsumedEntry`'s id is documented as a *broker-native* handle, opaque to
+    # callers. With two lanes we must remember which stream an entry came from in
+    # order to XACK it against the right one, so express ids carry a marker.
+    # This keeps the WorkerBroker interface (and the batcher, the worker loop and
+    # the test fakes) completely unchanged.
+    _EXPRESS_TAG = "x|"
+
+    @classmethod
+    def _tag(cls, entry_id: str, express: bool) -> str:
+        return f"{cls._EXPRESS_TAG}{entry_id}" if express else entry_id
+
+    @classmethod
+    def _untag(cls, entry_id: str) -> tuple[str, bool]:
+        if entry_id.startswith(cls._EXPRESS_TAG):
+            return entry_id[len(cls._EXPRESS_TAG) :], True
+        return entry_id, False
+
+    def _stream_for(self, model_name: str, express: bool) -> str:
+        return keys.express_stream(model_name) if express else keys.job_stream(model_name)
+
+    def _dead_letter(
+        self, model_name: str, entry_id: str, fields, reason: str, *, express: bool = False
+    ) -> None:
         """Park an unprocessable entry, then ack+delete it from the live lane.
 
         Acking is the whole point: without it the entry stays in the PEL forever,
@@ -164,10 +216,11 @@ class RedisWorkerBroker(WorkerBroker):
                     {str(k): str(v) for k, v in (fields or {}).items()}, default=str
                 ),
             }
+            lane = self._stream_for(model_name, express)
             pipe = self._client.pipeline(transaction=False)
             pipe.xadd(keys.dead_letter_stream(model_name), payload, maxlen=1_000, approximate=True)
-            pipe.xack(keys.job_stream(model_name), self._group, entry_id)
-            pipe.xdel(keys.job_stream(model_name), entry_id)
+            pipe.xack(lane, self._group, entry_id)
+            pipe.xdel(lane, entry_id)
             pipe.execute()
         except Exception as exc:  # noqa: BLE001 - never let cleanup kill the lane
             _log.error("dead_letter_failed", entry_id=entry_id, error=str(exc))
@@ -178,24 +231,45 @@ class RedisWorkerBroker(WorkerBroker):
         out: list[ConsumedEntry] = []
         if not resp:
             return out
-        for _stream, entries in resp:
+        express_stream = keys.express_stream(model_name)
+        for stream, entries in resp:
+            # redis-py decodes responses to str here, but be defensive: a client
+            # configured with decode_responses=False would hand back bytes and
+            # every entry would silently be treated as normal-lane.
+            name = stream.decode() if isinstance(stream, bytes) else stream
+            express = name == express_stream
             for entry_id, fields in entries:
                 try:
-                    out.append((entry_id, _decode_job(fields)))
+                    out.append((self._tag(entry_id, express), _decode_job(fields)))
                 except (KeyError, ValueError) as exc:
                     # A corrupt entry must not stall the lane -- and must not be
                     # left pending either. Park it and ack it away.
                     _log.error("dropping_undecodable_entry", entry_id=entry_id, error=str(exc))
-                    self._dead_letter(model_name, entry_id, fields, f"undecodable: {exc}")
+                    self._dead_letter(
+                        model_name, entry_id, fields, f"undecodable: {exc}", express=express
+                    )
         return out
 
     def ack(self, model_name: str, entry_ids: list[str]) -> None:
         if not entry_ids:
             return
-        stream = keys.job_stream(model_name)
+        # A batch can mix both lanes (express jobs are read first, then the
+        # window is topped up from the normal lane), so split by tag and ack each
+        # entry against the stream it actually came from. Acking an express id
+        # against the normal stream is a silent no-op that would leave the entry
+        # pending forever and eventually poison the lane.
+        by_lane: dict[bool, list[str]] = {True: [], False: []}
+        for tagged in entry_ids:
+            raw, express = self._untag(tagged)
+            by_lane[express].append(raw)
+
         pipe = self._client.pipeline(transaction=False)
-        pipe.xack(stream, self._group, *entry_ids)
-        pipe.xdel(stream, *entry_ids)  # delete so XLEN stays an accurate backlog
+        for express, ids in by_lane.items():
+            if not ids:
+                continue
+            stream = self._stream_for(model_name, express)
+            pipe.xack(stream, self._group, *ids)
+            pipe.xdel(stream, *ids)  # delete so XLEN stays an accurate backlog
         pipe.execute()
 
     def publish_result(self, result: InferenceResult) -> None:
@@ -209,7 +283,23 @@ class RedisWorkerBroker(WorkerBroker):
     def reclaim_stale(
         self, model_name: str, consumer: str, *, min_idle_ms: int, count: int
     ) -> list[ConsumedEntry]:
-        stream = keys.job_stream(model_name)
+        # Sweep BOTH lanes, express first — otherwise a high-priority job
+        # abandoned by a dead worker would be the one thing never recovered.
+        out: list[ConsumedEntry] = []
+        for express in (True, False):
+            out.extend(
+                self._reclaim_lane(
+                    model_name, consumer, express=express, min_idle_ms=min_idle_ms, count=count
+                )
+            )
+        if out:
+            _log.warning("reclaimed_stale_entries", model_name=model_name, count=len(out))
+        return out
+
+    def _reclaim_lane(
+        self, model_name: str, consumer: str, *, express: bool, min_idle_ms: int, count: int
+    ) -> list[ConsumedEntry]:
+        stream = self._stream_for(model_name, express)
         # NOTE: XPENDING's IDLE filter is Redis 6.2+. To also run on Redis 5.x
         # (the portable Windows build), we read the pending range without IDLE
         # and filter by ``time_since_delivered`` client-side -- same effect,
@@ -237,6 +327,7 @@ class RedisWorkerBroker(WorkerBroker):
                     p["message_id"],
                     None,
                     f"exceeded max_deliveries={max_deliveries}",
+                    express=express,
                 )
                 continue
             ids.append(p["message_id"])
@@ -250,12 +341,12 @@ class RedisWorkerBroker(WorkerBroker):
             if not fields:  # entry was deleted after pending snapshot
                 continue
             try:
-                out.append((entry_id, _decode_job(fields)))
+                out.append((self._tag(entry_id, express), _decode_job(fields)))
             except (KeyError, ValueError) as exc:
                 _log.error("dropping_undecodable_reclaim", entry_id=entry_id, error=str(exc))
-                self._dead_letter(model_name, entry_id, fields, f"undecodable: {exc}")
-        if out:
-            _log.warning("reclaimed_stale_entries", model_name=model_name, count=len(out))
+                self._dead_letter(
+                    model_name, entry_id, fields, f"undecodable: {exc}", express=express
+                )
         return out
 
     def heartbeat(self, hb: WorkerHeartbeat, ttl_s: int) -> None:

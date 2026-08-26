@@ -189,6 +189,23 @@ export function FleetMap() {
 
   const addVehicle = (car?: Car) => worldApi.current?.add(car);
 
+  // Drain any vehicles YOLO detected while the map was closed. The map mounts
+  // its Leaflet context only when open, so the queue is filled by SubmitPanel
+  // and consumed here on open.
+  const takeFleetSpawns = useStore((s) => s.takeFleetSpawns);
+  const queued = useStore((s) => s.fleetSpawnQueue.length);
+  const pushToast = useStore((s) => s.pushToast);
+  useEffect(() => {
+    if (!open || !queued) return;
+    // One tick, so WorldFleet has registered its api before we call into it.
+    const id = window.setTimeout(() => {
+      const labels = takeFleetSpawns();
+      const n = worldApi.current?.addDetected(labels) ?? 0;
+      if (n) pushToast("info", `🚗 ${n} detected vehicle${n === 1 ? "" : "s"} added to the fleet`);
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [open, queued, takeFleetSpawns, pushToast]);
+
   const setStop = (i: number, p: Place) => setStops((s) => s.map((v, idx) => (idx === i ? p : v)));
   const addStop = () => setStops((s) => (s.length >= 6 ? s : [...s, null]));
   const removeStop = (i: number) =>

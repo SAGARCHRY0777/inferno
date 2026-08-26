@@ -2,7 +2,8 @@ import L from "leaflet";
 import { useEffect, useRef, useState } from "react";
 import { Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 
-import { type Car, carDisplay, domainOf, flag, iconOf } from "@/lib/cars";
+import { type Car, carDisplay, domainOf, flag, iconOf, randomCarOfCategory } from "@/lib/cars";
+import { categoryForDetection } from "@/lib/fleet";
 import {
   isLocal,
   makeWorldFleet,
@@ -23,6 +24,12 @@ const MAX_LOCAL = 400;
 
 export interface WorldApi {
   add: (car?: Car) => void;
+  /**
+   * Spawn one local vehicle per YOLO vehicle label, in view.
+   * This is how a detection result becomes live traffic on the map.
+   * Returns how many were actually spawned.
+   */
+  addDetected: (labels: string[]) => number;
 }
 
 // react-leaflet compares `props.icon` by identity and calls marker.setIcon() —
@@ -156,6 +163,23 @@ export function WorldFleet({
         const c = map.getCenter();
         fleet.current.push(spawnAt([c.lat, c.lng], car));
         cull(false);
+      },
+      addDetected: (labels) => {
+        const c = map.getCenter();
+        const b = map.getBounds();
+        // Spread them across the visible area rather than stacking on the pin.
+        const spread = Math.max(0.008, Math.min(0.4, (b.getNorth() - b.getSouth()) / 2.5));
+        let spawned = 0;
+        for (const label of labels) {
+          const category = categoryForDetection(label);
+          if (!category) continue; // not a vehicle class (person, traffic light, ...)
+          fleet.current.push(
+            spawnLocal([c.lat, c.lng], spread, randomCarOfCategory(category)),
+          );
+          spawned++;
+        }
+        if (spawned) cull(false);
+        return spawned;
       },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -160,6 +160,31 @@ export function stepVehicle(v: Vehicle, dt: number): Vehicle {
 /** Vehicle-class labels YOLO produces that map onto the fleet. */
 export const VEHICLE_CLASSES = new Set(["car", "truck", "bus", "motorcycle", "bicycle"]);
 
+/**
+ * YOLO's COCO class name -> our vehicle Category.
+ *
+ * This is the join that makes a detection spawnable: YOLO says "bus", we pick a
+ * real bus out of the catalogue. `bicycle` has no catalogue equivalent, so it
+ * maps to the two-wheeler class.
+ */
+const YOLO_TO_CATEGORY: Record<string, string> = {
+  car: "car",
+  truck: "truck",
+  bus: "bus",
+  motorcycle: "bike",
+  bicycle: "bike",
+};
+
+/** The Category to spawn for a YOLO label, or null if it isn't a vehicle. */
+export function categoryForDetection(label: string): string | null {
+  return YOLO_TO_CATEGORY[label.toLowerCase()] ?? null;
+}
+
+/** Keep only the vehicle labels from a detection result, in detection order. */
+export function vehicleLabels(preds: { label: string }[]): string[] {
+  return preds.map((p) => p.label.toLowerCase()).filter((l) => VEHICLE_CLASSES.has(l));
+}
+
 // --------------------------------------------------------------------------- #
 // OSRM real-road routing (free public demo server, no key).                    #
 // All coordinate swapping goes through these two helpers in ONE place: OSRM    #

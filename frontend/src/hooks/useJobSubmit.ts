@@ -18,6 +18,12 @@ export interface SubmitArgs {
   inputType: InputType;
   payload: string; // base64 image OR raw text
   preview: string; // short human-readable preview for the feed
+  /**
+   * 0-9. Jobs at or above the gateway's `queue.express_priority_min` (default 5)
+   * are routed to the model's express lane, which workers drain before the
+   * normal lane. Omitted = 0.
+   */
+  priority?: number;
 }
 
 export interface SubmitOutcome {
@@ -39,7 +45,7 @@ export function useJobSubmit(): (args: SubmitArgs) => Promise<SubmitOutcome> {
   const { addJob, setJobPhase, setJobResult, setJobError, pushToast } = useStore.getState();
 
   return useCallback(
-    async ({ modelName, inputType, payload, preview }: SubmitArgs): Promise<SubmitOutcome> => {
+    async ({ modelName, inputType, payload, preview, priority = 0 }: SubmitArgs): Promise<SubmitOutcome> => {
       let resp: Response;
       // Bound the submit: a gateway that accepts the TCP connection but never
       // replies would otherwise leave this promise pending forever, and the
@@ -50,7 +56,7 @@ export function useJobSubmit(): (args: SubmitArgs) => Promise<SubmitOutcome> {
         resp = await fetch(endpoints.infer, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders() },
-          body: JSON.stringify({ model_name: modelName, input_type: inputType, payload }),
+          body: JSON.stringify({ model_name: modelName, input_type: inputType, payload, priority }),
           signal: submitAbort.signal,
         });
       } catch (e) {

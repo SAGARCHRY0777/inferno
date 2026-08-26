@@ -235,7 +235,9 @@ export function stepWorldVehicle(v: WorldVehicle, dt: number): WorldVehicle {
     // Local traffic keeps circulating locally. Without this it would take a
     // normal intercity leg on arrival and immediately drive off the screen,
     // leaving the view empty again a few seconds after it was seeded.
-    if (isLocal(v)) return { ...spawnLocal(v.to, 0.05), id: v.id, t: 0 };
+    // Carry the same car across hops: a bus YOLO detected must stay that bus,
+    // not be re-rolled into a random vehicle every time it reaches its stop.
+    if (isLocal(v)) return { ...spawnLocal(v.to, 0.05, v.car), id: v.id, t: 0 };
     return startLeg({ ...v, to: v.to }); // arrived → next leg
   }
   return { ...v, t, pos: [v.from[0] + (v.to[0] - v.from[0]) * t, v.from[1] + (v.to[1] - v.from[1]) * t] };
@@ -253,12 +255,12 @@ export function stepWorldVehicle(v: WorldVehicle, dt: number): WorldVehicle {
  * `spreadDeg` should be roughly the visible radius, so trips stay in frame long
  * enough to watch.
  */
-export function spawnLocal(center: LatLng, spreadDeg = 0.05): WorldVehicle {
+export function spawnLocal(center: LatLng, spreadDeg = 0.05, withCar?: Car): WorldVehicle {
   const jitter = (): LatLng => [
     center[0] + (Math.random() - 0.5) * spreadDeg * 2,
     center[1] + (Math.random() - 0.5) * spreadDeg * 2,
   ];
-  const car = randomCarOf("road");
+  const car = withCar ?? randomCarOf("road");
   const from = jitter();
   const to = jitter();
   return {

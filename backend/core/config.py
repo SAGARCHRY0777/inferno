@@ -70,6 +70,14 @@ class QueueSettings(BaseModel):
         default=2, ge=1,
         description="Value of the Retry-After header sent with a 429.",
     )
+    express_priority_min: int = Field(
+        default=5, ge=1, le=9,
+        description=(
+            "Jobs with InferenceRequest.priority >= this go to the model's express "
+            "lane, which workers drain before the normal lane. Set to 10 to disable "
+            "priority routing entirely (nothing can reach it, since priority maxes at 9)."
+        ),
+    )
 
     @model_validator(mode="after")
     def _check_watermarks(self) -> QueueSettings:

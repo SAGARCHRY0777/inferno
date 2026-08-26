@@ -52,6 +52,7 @@ chase).</sub>
 | --- | --- |
 | **Dynamic request batching** (configurable max size + max wait window) | [`backend/worker/batcher.py`](backend/worker/batcher.py) |
 | **Backpressure** — HTTP 429 + `Retry-After` with hysteresis | [`backend/gateway/backpressure.py`](backend/gateway/backpressure.py) |
+| **Priority lanes** — express stream drained before the normal lane (Redis Streams are FIFO, so priority is *routing*, not sorting) | [`backend/broker/redis_broker.py`](backend/broker/redis_broker.py) |
 | **Task-typed, model-agnostic plugins** (classification · detection · transcription) + config-driven registry | [`backend/models/`](backend/models/) |
 | **5 reference models** — text sentiment, image classify, **object detection**, **speech-to-text**, dummy | [`backend/models/models.yaml`](backend/models/models.yaml) |
 | **Optional API-key auth + per-client quotas** (Redis-backed, multi-replica safe) | [`backend/gateway/security.py`](backend/gateway/security.py) |
@@ -423,7 +424,7 @@ Still open:
 
 - **Model warm pools** + readiness gating so a cold model never serves a slow first batch.
 - **A/B & canary model routing** by request header or weighted lane.
-- **Priority lanes** (the `priority` field is plumbed through; today it's FIFO).
+- **Weighted fair queueing** across priority tiers (today: two lanes, express-first).
 - **OIDC** as an alternative to API keys, with per-tenant quotas feeding backpressure.
 - **Pushing images to a registry from CI** (today CI only proves they build).
 - **Container/pod hardening** — non-root `USER`, `securityContext`, PodDisruptionBudgets.

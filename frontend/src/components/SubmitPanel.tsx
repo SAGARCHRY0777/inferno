@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useJobSubmit } from "@/hooks/useJobSubmit";
+import { vehicleLabels } from "@/lib/fleet";
 import { fmtMs } from "@/lib/format";
 import { useStore } from "@/store/useStore";
 import type { ModelInfo } from "@/types";
@@ -16,6 +17,8 @@ const SAMPLE_TEXT = "Inferno batches requests beautifully and the latency is inc
 export function SubmitPanel() {
   const models = useStore((s) => s.models);
   const jobs = useStore((s) => s.jobs);
+  const queueFleetSpawns = useStore((s) => s.queueFleetSpawns);
+  const setFleetOpen = useStore((s) => s.setFleetOpen);
   const submit = useJobSubmit();
 
   const [modelName, setModelName] = useState<string>("");
@@ -26,6 +29,10 @@ export function SubmitPanel() {
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Express = priority 9, which the gateway routes to the model's express lane
+  // (workers drain it before the normal lane). Visible under load: queue a burst
+  // with the stress test, then submit one express job and watch it jump ahead.
+  const [express, setExpress] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const model: ModelInfo | undefined = useMemo(
@@ -108,7 +115,13 @@ export function SubmitPanel() {
 
     setBusy(true);
     try {
-      const outcome = await submit({ modelName: model.name, inputType: kind, payload, preview });
+      const outcome = await submit({
+        modelName: model.name,
+        inputType: kind,
+        payload,
+        preview,
+        priority: express ? 9 : 0,
+      });
       if (outcome.ok && outcome.jobId) {
         setActiveJobId(outcome.jobId);
         setResultImage(kind === "image" && image ? image.url : null); // keep image for box overlay
@@ -192,6 +205,23 @@ export function SubmitPanel() {
           placeholder="Type or paste text to classify…"
         />
       )}
+
+      {/* Priority lane toggle. Redis Streams are FIFO, so this routes the job to
+          a separate express stream that workers drain first — not a sort key. */}
+      <button
+        onClick={() => setExpress((e) => !e)}
+        aria-pressed={express}
+        className={`focusable flex w-full items-center justify-between rounded-lg border px-2.5 py-1.5 text-[11px] transition ${
+          express
+            ? "border-warn/60 bg-warn/10 text-ink"
+            : "border-hairline bg-surface/40 text-ink-muted hover:bg-surface-hover"
+        }`}
+      >
+        <span>{express ? "⚡ Express lane" : "Normal lane"}</span>
+        <span className="ml-2 shrink-0 text-ink-faint">
+          {express ? "priority 9 · served first" : "priority 0 · FIFO"}
+        </span>
+      </button>
 
       <Magnetic strength={0.25}>
         <button
@@ -284,6 +314,31 @@ export function SubmitPanel() {
                   <span>infer {fmtMs(activeJob.result.timings.inference_ms)}</span>
                   <span>total {fmtMs(activeJob.result.timings.total_ms)}</span>
                 </div>
+                {/* Detection -> Fleet: the vehicles the model just found in this
+                    photo become live traffic on the Fleet Command map. */}
+                {(() => {
+                  const found = vehicleLabels(activeJob.result.predictions ?? []);
+                  if (!found.length) return null;
+                  const counts = found.reduce<Record<string, number>>((acc, l) => {
+                    acc[l] = (acc[l] ?? 0) + 1;
+                    return acc;
+                  }, {});
+                  const summary = Object.entries(counts)
+                    .map(([l, n]) => `${n} ${l}${n === 1 ? "" : "s"}`)
+                    .join(" · ");
+                  return (
+                    <button
+                      onClick={() => {
+                        queueFleetSpawns(found);
+                        setFleetOpen(true);
+                      }}
+                      className="focusable flex w-full items-center justify-between rounded-lg border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-[11px] text-ink transition hover:bg-accent/20"
+                    >
+                      <span>🚗 Send {found.length} detected to Fleet map</span>
+                      <span className="ml-2 shrink-0 text-ink-muted">{summary}</span>
+                    </button>
+                  );
+                })()}
               </>
             )}
             {activeJob.result?.status === "error" && (

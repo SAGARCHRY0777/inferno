@@ -27,6 +27,21 @@ def job_stream(model_name: str) -> str:
     return _join(C.STREAM_SEGMENT, model_name)
 
 
+def express_stream(model_name: str) -> str:
+    """High-priority lane for a model.
+
+    Redis Streams are strictly FIFO — entries cannot be reordered once appended —
+    so priority is expressed as a *separate stream* that workers drain first,
+    not as a sort key. Jobs with ``priority >= queue.express_priority_min`` land
+    here; everything else stays on :func:`job_stream`.
+
+    Keeping the normal lane's key unchanged matters: queue depth, backpressure
+    water marks and the KEDA autoscalers all key off it.
+    """
+
+    return _join(C.STREAM_SEGMENT, model_name, "express")
+
+
 def dead_letter_stream(model_name: str) -> str:
     """Stream holding entries that could not be processed and were given up on.
 

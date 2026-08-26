@@ -45,6 +45,15 @@ spec:
         consumerGroup: "inferno-workers"
         streamLength: "20"        # >20 queued per replica → scale up
         activationStreamLength: "1"
+    # Express lane: priority jobs live on a separate stream, so without
+    # this trigger a backlog of high-priority work would never scale up.
+    - type: redis-streams
+      metadata:
+        address: redis.inferno.svc.cluster.local:6379
+        stream: "inferno:jobs:yolo-detect:express"
+        consumerGroup: "inferno-workers"
+        streamLength: "10"
+        activationStreamLength: "1"
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -65,6 +74,15 @@ spec:
         stream: "inferno:jobs:whisper-transcribe"
         consumerGroup: "inferno-workers"
         streamLength: "10"
+        activationStreamLength: "1"
+    # Express lane: priority jobs live on a separate stream, so without
+    # this trigger a backlog of high-priority work would never scale up.
+    - type: redis-streams
+      metadata:
+        address: redis.inferno.svc.cluster.local:6379
+        stream: "inferno:jobs:whisper-transcribe:express"
+        consumerGroup: "inferno-workers"
+        streamLength: "5"
         activationStreamLength: "1"
 ---
 apiVersion: keda.sh/v1alpha1
@@ -87,6 +105,15 @@ spec:
         consumerGroup: "inferno-workers"
         streamLength: "30"
         activationStreamLength: "1"
+    # Express lane: priority jobs live on a separate stream, so without
+    # this trigger a backlog of high-priority work would never scale up.
+    - type: redis-streams
+      metadata:
+        address: redis.inferno.svc.cluster.local:6379
+        stream: "inferno:jobs:distilbert-sentiment:express"
+        consumerGroup: "inferno-workers"
+        streamLength: "15"
+        activationStreamLength: "1"
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -107,6 +134,15 @@ spec:
         stream: "inferno:jobs:rag-search"
         consumerGroup: "inferno-workers"
         streamLength: "20"
+        activationStreamLength: "1"
+    # Express lane: priority jobs live on a separate stream, so without
+    # this trigger a backlog of high-priority work would never scale up.
+    - type: redis-streams
+      metadata:
+        address: redis.inferno.svc.cluster.local:6379
+        stream: "inferno:jobs:rag-search:express"
+        consumerGroup: "inferno-workers"
+        streamLength: "10"
         activationStreamLength: "1"
 ---
 # resnet + dummy were previously uncovered, so they stayed pinned at replicas: 1
@@ -131,6 +167,15 @@ spec:
         consumerGroup: "inferno-workers"
         streamLength: "25"
         activationStreamLength: "1"
+    # Express lane: priority jobs live on a separate stream, so without
+    # this trigger a backlog of high-priority work would never scale up.
+    - type: redis-streams
+      metadata:
+        address: redis.inferno.svc.cluster.local:6379
+        stream: "inferno:jobs:resnet-image:express"
+        consumerGroup: "inferno-workers"
+        streamLength: "12"
+        activationStreamLength: "1"
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -151,4 +196,13 @@ spec:
         stream: "inferno:jobs:dummy-echo"
         consumerGroup: "inferno-workers"
         streamLength: "50"
+        activationStreamLength: "1"
+    # Express lane: priority jobs live on a separate stream, so without
+    # this trigger a backlog of high-priority work would never scale up.
+    - type: redis-streams
+      metadata:
+        address: redis.inferno.svc.cluster.local:6379
+        stream: "inferno:jobs:dummy-echo:express"
+        consumerGroup: "inferno-workers"
+        streamLength: "25"
         activationStreamLength: "1"

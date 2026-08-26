@@ -186,6 +186,85 @@ the HUD. **Only road vehicles are playable** — every mode routes on OSRM's dri
 profile, so offering a container ship would reproduce the exact straight-line
 fiction fixed above.
 
+### 🪦 The fleet map was frozen — and empty
+
+Two compounding bugs made Fleet Command look dead on arrival:
+
+1. **`WorldFleet.cull()` only stepped vehicles already inside the viewport.** The
+   entire world off-screen was frozen, so no vehicle could ever drive *into*
+   view — you saw only whatever happened to spawn on screen at load. Now every
+   vehicle steps (a few arithmetic ops each) and culling applies to **rendering**
+   only, which is the expensive part and still capped at `CAP = 240`.
+2. **The map opens on San Francisco at zoom 13**, while the fleet travels between
+   ~96 *global* airports/ports/cities. Those routes essentially never cross a
+   city-sized viewport, so the honest count was `0 in view / 1400 total`.
+   `spawnLocal()` now seeds short local trips around wherever you are looking,
+   bounded at 400 so panning cannot grow the fleet without limit.
+
+Verified in a browser: **11 in view (was 0), and all 11 moved** over 4 seconds.
+
+### 🔗 YOLO → Fleet: the dead constant, finished
+
+`VEHICLE_CLASSES` sat in `fleet.ts` with **zero usages** — the fossil of an
+unfinished idea. It is now the join that connects the inference platform to
+Fleet Command, which was otherwise a beautiful toy bolted onto an ML product:
+
+```
+submit street.jpg → yolo-detect → 3 car · 1 bus · 2 truck
+        → "Send 6 detected to Fleet map"
+        → real Toyotas / Volvos / Citaros driving your city
+```
+
+YOLO's COCO labels map onto the vehicle categories added above
+(`car`→car, `truck`→truck, `bus`→bus, `motorcycle`/`bicycle`→bike), and
+`randomCarOfCategory()` picks an actual catalogue vehicle for each detection.
+Non-vehicle classes (person, traffic light…) are skipped.
+
+Verified end to end in a browser: 9 labels including one `person` → the fleet
+grew by **exactly 8**, with the person skipped and no page errors.
+
+### ⚡ `priority` stopped being a lie
+
+The API accepted `priority: 0-9`, carried it all the way into Redis, and then
+**ignored it** — the queue was pure FIFO, so every client setting a priority got
+nothing. The README admitted this in a footnote; the API did not.
+
+Redis Streams are append-only FIFO, so entries cannot be reordered once written.
+Priority is therefore **routing, not sorting**: jobs at or above
+`queue.express_priority_min` (default 5) go to `inferno:jobs:<model>:express`,
+and workers read both lanes in one `XREADGROUP` with express listed first —
+which is what actually delivers the ordering, in a single round trip and without
+starving the normal lane.
+
+Design notes worth keeping:
+
+* **The normal lane's key is unchanged**, so queue depth, the backpressure water
+  marks and the KEDA autoscalers all keep working untouched.
+* **`queue_depth` sums both lanes** — a flood of express jobs is still a
+  saturated lane, and load shedding has to see it.
+* **Entry ids carry their lane.** `ConsumedEntry`'s id is documented as a
+  *broker-native* handle, so express ids get a marker prefix. A batch can mix
+  lanes, and acking an express id against the normal stream is a silent no-op
+  that would leave the entry pending forever. This kept `WorkerBroker`, the
+  batcher, the worker loop and the test fakes completely unchanged.
+* **Reclaim sweeps both lanes, express first** — otherwise a high-priority job
+  abandoned by a dead worker would be the one thing never recovered.
+
+Exposed in the UI as a **Normal / ⚡ Express** toggle, so it is demonstrable:
+queue a burst with the stress test, submit one express job, watch it jump ahead.
+Covered by 12 new tests, including a guard that fails if the express-first lane
+ordering is ever flipped — without it, priority would silently stop working while
+every routing test still passed.
+
+### 🚀 Auto-deploy that actually fires
+
+Render's "Auto-Deploy: On Commit" was enabled but **never fired** — the Events
+tab showed only a June deploy and a manual one, with commit `621f799` sitting
+undeployed for hours. `.github/workflows/deploy.yml` now calls Render's Deploy
+Hook after CI passes on `main`, so deploys are triggered by something visible,
+loggable and re-runnable. Needs a `RENDER_DEPLOY_HOOK` secret; without it the
+workflow skips cleanly rather than failing red.
+
 ### 🧩 Bring your own model
 
 There was no upload path *and no documentation at all*. Now in
