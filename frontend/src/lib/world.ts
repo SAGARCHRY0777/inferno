@@ -69,22 +69,52 @@ const pick = <T,>(a: T[]): T => a[rnd(a.length)];
 const degDist = (a: LatLng, b: LatLng) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
 function endpoints(domain: Domain): Loc[] {
-  return domain === "air" ? AIRPORTS : domain === "sea" ? PORTS : domain === "underwater" ? OCEAN : CITIES;
+  // Rail shares the city list: intercity trains run station-to-station between
+  // the same major cities, which is exactly what CITIES holds.
+  return domain === "air"
+    ? AIRPORTS
+    : domain === "sea"
+      ? PORTS
+      : domain === "underwater"
+        ? OCEAN
+        : CITIES;
 }
 
 function maxDegFor(t: CarType): number {
   const m: Partial<Record<CarType, number>> = {
-    airliner: 85, jet: 55, helicopter: 12, balloon: 6,
-    ship: 130, cruise: 90, ferry: 26, yacht: 30, speedboat: 12, sailboat: 26,
-    submarine: 45, truck: 24,
+    // air
+    airliner: 85, cargoplane: 80, jet: 55, seaplane: 14, helicopter: 12, drone: 3, balloon: 6,
+    // sea
+    ship: 130, container: 130, seatanker: 120, cruise: 90, ferry: 26, icebreaker: 60,
+    tug: 6, fishing: 30, yacht: 30, speedboat: 12, sailboat: 26,
+    // underwater
+    submarine: 45, submersible: 8, rov: 3,
+    // rail — trains run intercity, not intercontinental
+    highspeed: 18, freighttrain: 30, metro: 2, tram: 1.5,
+    // road commercial
+    truck: 24, semi: 30, tanker: 22, dumper: 3, mixer: 3, van: 12, pickup: 16,
+    bus: 10, coach: 26, ambulance: 6, firetruck: 4, police: 8,
+    motorcycle: 14, scooter: 4, offroad: 18,
   };
   return m[t] ?? 20;
 }
 function speedFor(t: CarType): number {
   const s: Partial<Record<CarType, number>> = {
-    airliner: 0.07, jet: 0.06, helicopter: 0.03, balloon: 0.012,
-    ship: 0.013, cruise: 0.016, ferry: 0.02, yacht: 0.022, speedboat: 0.03, sailboat: 0.016,
-    submarine: 0.014, truck: 0.018,
+    // air
+    airliner: 0.07, cargoplane: 0.06, jet: 0.06, seaplane: 0.03, helicopter: 0.03,
+    drone: 0.02, balloon: 0.012,
+    // sea
+    ship: 0.013, container: 0.013, seatanker: 0.011, cruise: 0.016, ferry: 0.02,
+    icebreaker: 0.012, tug: 0.01, fishing: 0.014, yacht: 0.022, speedboat: 0.03, sailboat: 0.016,
+    // underwater
+    submarine: 0.014, submersible: 0.006, rov: 0.004,
+    // rail
+    highspeed: 0.05, freighttrain: 0.022, metro: 0.02, tram: 0.012,
+    // road commercial
+    truck: 0.018, semi: 0.019, tanker: 0.017, dumper: 0.008, mixer: 0.008,
+    van: 0.021, pickup: 0.023, bus: 0.016, coach: 0.021,
+    ambulance: 0.028, firetruck: 0.024, police: 0.03,
+    motorcycle: 0.028, scooter: 0.016, offroad: 0.02,
   };
   return s[t] ?? 0.02;
 }
@@ -102,6 +132,40 @@ function cargoFor(c: Car): string {
     case "sailboat": return `${2 + rnd(5)} crew`;
     case "submarine": return `${15 + rnd(110)} crew · classified`;
     case "truck": return `${5 + rnd(35)} t freight`;
+    // air
+    case "cargoplane": return `${20 + rnd(120)} t air freight`;
+    case "seaplane": return `${4 + rnd(14)} passengers · water landing`;
+    case "drone": return `${1 + rnd(25)} kg parcel`;
+    // sea
+    case "container": return `${8000 + rnd(16000)} containers (TEU)`;
+    case "seatanker": return `${80 + rnd(240)}k t crude / LNG`;
+    case "tug": return `assisting a ${20 + rnd(180)}k t vessel`;
+    case "fishing": return `${20 + rnd(400)} t catch`;
+    case "icebreaker": return `clearing ${1 + rnd(3)}.${rnd(9)} m ice`;
+    // underwater
+    case "submersible": return `${2 + rnd(3)} aboard · ${1 + rnd(6)}km depth`;
+    case "rov": return "survey · remotely operated";
+    // rail
+    case "highspeed": return `${300 + rnd(900)} passengers`;
+    case "freighttrain": return `${40 + rnd(120)} wagons · ${1000 + rnd(4000)} t`;
+    case "metro": return `${400 + rnd(1200)} commuters`;
+    case "tram": return `${80 + rnd(200)} passengers`;
+    // road · commercial
+    case "semi": return `${15 + rnd(30)} t · ${1 + rnd(2)} trailers`;
+    case "tanker": return `${10 + rnd(30)}k L fuel`;
+    case "pickup": return `${1 + rnd(3)} t payload`;
+    case "van": return `${10 + rnd(90)} parcels`;
+    case "dumper": return `${30 + rnd(300)} t ore`;
+    case "mixer": return `${6 + rnd(6)} m³ concrete`;
+    // road · public + emergency
+    case "bus": return `${20 + rnd(60)} passengers`;
+    case "coach": return `${30 + rnd(50)} passengers · intercity`;
+    case "ambulance": return "1 patient · emergency response";
+    case "firetruck": return `${2 + rnd(6)} crew · ${1 + rnd(9)}k L water`;
+    case "police": return `${1 + rnd(3)} officers · patrol`;
+    // road · two-wheelers
+    case "motorcycle": return `${1 + rnd(2)} rider${rnd(2) ? "s" : ""}`;
+    case "scooter": return "1 rider · city commute";
     default: return `${1 + rnd(4)} passengers`;
   }
 }
@@ -138,7 +202,8 @@ export function makeWorldFleet(n: number): WorldVehicle[] {
   const out: WorldVehicle[] = [];
   for (let i = 0; i < n; i++) {
     const r = Math.random();
-    const domain: Domain = r < 0.5 ? "road" : r < 0.72 ? "air" : r < 0.92 ? "sea" : "underwater";
+    const domain: Domain =
+      r < 0.44 ? "road" : r < 0.56 ? "rail" : r < 0.74 ? "air" : r < 0.93 ? "sea" : "underwater";
     const car = randomCarOf(domain);
     const o = pick(endpoints(domain));
     const from: LatLng = [o[0], o[1]];

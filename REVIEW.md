@@ -122,6 +122,82 @@ exemplary (AbortController + timeout + cleanup).
 
 ---
 
+## Round 2 — Fleet, models & the arcade
+
+Follow-up work after the review, driven by three questions: *where does a user
+run their own model?*, *why is A→B broken?*, and *can the fleet be a real game?*
+
+### 🗺️ A→B routing was drawing fiction
+
+The planner trusted OSRM's `code: "Ok"`. OSRM snaps every waypoint to the nearest
+road **with no distance limit**, so a point with no road near it still yields a
+confident route between two unrelated places. Measured against the live server:
+
+| Input | What OSRM returned | Before | After |
+|---|---|---|---|
+| Bangalore → Mysore | snap 0 km, real 143 km route | accepted | accepted ✓ |
+| Two mid-Atlantic points | both snapped to the **same street in Brazil** (500 km / 1,277 km away) → **0 m route** | accepted | rejected ✓ |
+| London → New York | New York snapped **5,534 km** onto another continent → fake "2,149 km" road across the ocean | accepted | rejected ✓ |
+
+`fleet.ts` now rejects any route whose waypoints were snapped more than 25 km, or
+whose geometry collapsed to a single point, and the UI says *"no road route
+between these points"* instead of the vague "routing unavailable".
+
+### 🧱 The basemap was defaced
+
+`basemaps.cartocdn.com/dark_all` returns **HTTP 200 with "API KEY REQUIRED"
+stamped diagonally across every tile** — CARTO now requires a key, and because
+the request still succeeds the map rendered defaced rather than failing. Switched
+to OpenStreetMap's keyless tiles, darkened via the `.map-tiles-dark` CSS filter
+(heavy desaturation, so the fleet markers stay the most saturated thing on
+screen). This was visible on the **live demo**.
+
+### 🚚 Vehicle categories — 86 → 160 vehicles
+
+`CarType` grew to 40+ body types grouped into 10 **categories**, with filter chips
+in the picker and the type dropdown narrowing to the chosen category (so an empty
+combination like "Trucks + jet" is impossible).
+
+| | | | |
+|---|---|---|---|
+| 🚗 Cars 59 | 🚛 Trucks & Freight 25 *(was 2)* | ✈️ Aircraft 19 | 🚢 Ships 14 |
+| 🚆 Trains 12 *(new `rail` domain)* | 🏍️ Motorcycles 7 *(new)* | 🛥️ Boats 6 | 🤿 Underwater 6 |
+| 🚌 Buses 6 *(new)* | 🚑 Emergency 6 *(new)* | | |
+
+Each new type has its own speed, range and cargo description in `world.ts`.
+
+### 🎮 The arcade now uses the catalogue
+
+Previously all three modes drove one generic green arrow at a fixed speed — the
+whole catalogue was cosmetic. Added a **garage** (`lib/vehicleStats.ts`) where the
+choice is a real trade-off: **the faster you move, the less each delivery pays.**
+
+| Class | Speed | Payout | Plays like |
+|---|---|---|---|
+| 🏍️ Motorcycles | ×1.45 | ×0.65 | many small fares |
+| 🚑 Emergency | ×1.30 | ×0.95 | fast, near-normal pay |
+| 🚗 Cars | ×1.00 | ×1.00 | balanced |
+| 🚌 Buses | ×0.80 | ×1.70 | slow, high volume |
+| 🚛 Trucks | ×0.62 | ×2.40 | sluggish, big payouts |
+
+Per-type nudges keep vehicles distinct inside a class (a Supra is 1.22×, a Hilux
+0.65×). The pick persists in `localStorage`, rides on the map marker, and shows in
+the HUD. **Only road vehicles are playable** — every mode routes on OSRM's driving
+profile, so offering a container ship would reproduce the exact straight-line
+fiction fixed above.
+
+### 🧩 Bring your own model
+
+There was no upload path *and no documentation at all*. Now in
+[`docs/BRING-YOUR-OWN-MODEL.md`](docs/BRING-YOUR-OWN-MODEL.md): Hugging Face,
+YOLO and Whisper weights already worked from a local path (undocumented), but
+**`onnx-image` was hardcoded to ResNet-18** — a user's own ONNX model was
+impossible without editing code. It now accepts `weights` + `labels` params and
+**fails loudly** if they're missing, rather than silently serving ResNet-18
+predictions from what you believe is your model.
+
+---
+
 ## Verification
 
 Everything below was run against the modified tree:

@@ -45,10 +45,40 @@ class ResNetOnnxModel(BaseModel[_Batch, _Raw]):
         self._top_k = int(self.params.get("top_k", 5))
         artifact_dir: Path = get_settings().models.artifact_dir
         artifact_dir.mkdir(parents=True, exist_ok=True)
-        onnx_path = artifact_dir / "resnet18.onnx"
-        labels_path = artifact_dir / "resnet18_categories.json"
 
-        if not onnx_path.exists() or not labels_path.exists():
+        # Bring-your-own-model hook: point `weights` (and `labels`) at your own
+        # exported classifier in models.yaml and this kind serves it with no code
+        # changes. Relative paths resolve inside models.artifact_dir; absolute
+        # paths are used as-is. With neither set we fall back to exporting
+        # torchvision's ResNet-18, which is the zero-config default.
+        weights_param = str(self.params.get("weights", "") or "")
+        labels_param = str(self.params.get("labels", "") or "")
+        custom = bool(weights_param)
+
+        def _resolve(value: str, default: str) -> Path:
+            if not value:
+                return artifact_dir / default
+            p = Path(value)
+            return p if p.is_absolute() else artifact_dir / p
+
+        onnx_path = _resolve(weights_param, "resnet18.onnx")
+        labels_path = _resolve(labels_param, "resnet18_categories.json")
+
+        if custom:
+            # Fail loudly and specifically: silently exporting ResNet-18 over a
+            # user's own model would serve confident predictions from entirely
+            # the wrong network.
+            if not onnx_path.exists():
+                raise ModelLoadError(
+                    f"onnx weights not found: {onnx_path}. Set params.weights to a path "
+                    f"relative to {artifact_dir} or an absolute path."
+                )
+            if not labels_path.exists():
+                raise ModelLoadError(
+                    f"labels file not found: {labels_path}. Provide params.labels as a "
+                    "JSON array of class names matching the model's output order."
+                )
+        elif not onnx_path.exists() or not labels_path.exists():
             self._export(onnx_path, labels_path)
 
         from backend.models.runtime import resolve_onnx_providers
@@ -58,8 +88,9 @@ class ResNetOnnxModel(BaseModel[_Batch, _Raw]):
         self._session = ort.InferenceSession(str(onnx_path), providers=providers)
         self._input_name = self._session.get_inputs()[0].name
         _log.info(
-            "resnet_loaded",
+            "onnx_image_loaded",
             onnx=str(onnx_path),
+            custom=custom,
             classes=len(self._categories),
             providers=self._session.get_providers(),
         )

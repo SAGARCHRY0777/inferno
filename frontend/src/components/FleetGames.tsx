@@ -1,9 +1,23 @@
 import L from "leaflet";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Circle, Marker, Polyline, useMap, useMapEvents } from "react-leaflet";
 
+import {
+  type Car,
+  CARS,
+  carDisplay,
+  categoryLabel,
+  categoryOf,
+  iconOf,
+} from "@/lib/cars";
 import { bearing, formatKm, type LatLng, routeThrough } from "@/lib/fleet";
+import {
+  isPlayable,
+  PLAYABLE_CATEGORIES,
+  stars,
+  statsFor,
+} from "@/lib/vehicleStats";
 import { distM, pathDist, randomPointNear, tspBest } from "@/lib/games";
 import { type Place, searchPlaces } from "@/lib/geocode";
 import { sound } from "@/lib/sound";
@@ -17,6 +31,11 @@ const ENEMY = "#FF4D6D"; // red = target
 const GOLD = "#FFB020";
 
 // high scores (per game) in localStorage
+// Only road vehicles are playable: every mode routes over OSRM's driving
+// profile, so a ship or airliner has no drivable path (see lib/vehicleStats).
+const PLAYABLE: Car[] = CARS.filter(isPlayable);
+const RIDE_KEY = "inferno.ride";
+
 const hiKey = (m: string) => `inferno.hi.${m}`;
 const getHi = (m: string): number => {
   try {
@@ -46,14 +65,22 @@ function pin(color: string, label = "", size = 22): L.DivIcon {
       box-shadow:0 0 12px ${color};border:2px solid #0A0B0F;cursor:pointer">${label}</div>`,
   });
 }
-function car(heading: number, color: string): L.DivIcon {
+function car(heading: number, color: string, glyph?: string): L.DivIcon {
+  // The arrow still carries the heading (so you can read where you're going);
+  // the chosen vehicle's emoji rides on top so your pick is visible on the map.
+  const badge = glyph
+    ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+        font-size:11px;line-height:1;pointer-events:none">${glyph}</div>`
+    : "";
   return L.divIcon({
     className: "av-marker",
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
-    html: `<div style="transform:rotate(${heading}deg);filter:drop-shadow(0 0 6px ${color})">
-      <svg width="22" height="22" viewBox="0 0 16 16"><path d="M8 0.5 L13.5 14.5 L8 11 L2.5 14.5 Z"
-      fill="${color}" stroke="#0A0B0F" stroke-width="0.7"/></svg></div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    html: `<div style="position:relative;width:26px;height:26px">
+      <div style="transform:rotate(${heading}deg);filter:drop-shadow(0 0 6px ${color})">
+        <svg width="26" height="26" viewBox="0 0 16 16"><path d="M8 0.5 L13.5 14.5 L8 11 L2.5 14.5 Z"
+        fill="${color}" stroke="#0A0B0F" stroke-width="0.7"/></svg></div>
+      ${badge}</div>`,
   });
 }
 
@@ -135,12 +162,47 @@ export function FleetGames({
   const [best, setBest] = useState(0);
   const scoreRef = useRef(0);
 
+  // --- garage: the vehicle you drive, and what it changes ------------------ //
+  // Persisted so your pick survives a reload; falls back to the first playable
+  // car if the stored one was renamed or removed from the catalogue.
+  const [ride, setRide] = useState<Car>(() => {
+    try {
+      const saved = localStorage.getItem(RIDE_KEY);
+      if (saved) {
+        const hit = PLAYABLE.find((c) => `${c.brand} ${c.model}` === saved);
+        if (hit) return hit;
+      }
+    } catch {
+      /* private mode / storage blocked */
+    }
+    return PLAYABLE[0];
+  });
+  const [garageOpen, setGarageOpen] = useState(false);
+  const [garageCat, setGarageCat] = useState<string>("");
+  const rideStats = useMemo(() => statsFor(ride), [ride]);
+  // Read inside timers/callbacks so a mid-game swap can't be captured stale.
+  const rideRef = useRef(ride);
+  rideRef.current = ride;
+  const speedMul = () => statsFor(rideRef.current).speedMul;
+
+  const chooseRide = (c: Car) => {
+    setRide(c);
+    setGarageOpen(false);
+    try {
+      localStorage.setItem(RIDE_KEY, `${c.brand} ${c.model}`);
+    } catch {
+      /* ignore */
+    }
+  };
+
   useEffect(() => onActive?.(mode !== null), [mode, onActive]);
 
   const bumpScore = (n: number) => {
     scoreRef.current += n;
     setScore(scoreRef.current);
   };
+  /** Payout for a delivery, scaled by the vehicle's reward multiplier. */
+  const payout = (base: number) => Math.max(1, Math.round(base * statsFor(rideRef.current).rewardMul));
 
   // player vehicle (dispatch + intercept), driven via refs (no setState races)
   const [player, setPlayer] = useState<Driver | null>(null);
@@ -279,14 +341,14 @@ export function FleetGames({
     setBusy(true);
     setStatus("🚗 heading to pickup");
     const from = playerRef.current?.pos ?? center();
-    setPv(makeDriver(await geom([from, o.pickup])));
+    setPv(makeDriver(await geom([from, o.pickup]), speedMul()));
     arriveRef.current = () => {
       setStatus("🍳 preparing order…");
       later(async () => {
         setStatus("📦 delivering");
-        setPv(makeDriver(await geom([o.pickup, o.dropoff])));
+        setPv(makeDriver(await geom([o.pickup, o.dropoff]), speedMul()));
         arriveRef.current = () => {
-          bumpScore(o.reward);
+          bumpScore(payout(o.reward));
           sound.deliver();
           setOrders((os) => os.filter((x) => x.id !== o.id));
           setStatus("✅ delivered!");
@@ -302,7 +364,7 @@ export function FleetGames({
     async click(e) {
       if (mode !== "intercept" || !running || !playerRef.current) return;
       sound.blip();
-      setPv(makeDriver(await geom([playerRef.current.pos, [e.latlng.lat, e.latlng.lng]])));
+      setPv(makeDriver(await geom([playerRef.current.pos, [e.latlng.lat, e.latlng.lng]]), speedMul()));
       arriveRef.current = null;
     },
   });
@@ -475,7 +537,12 @@ export function FleetGames({
       {player && player.route.length > 1 && (
         <Polyline positions={player.route} pathOptions={{ color: PLAYER, weight: 3, opacity: 0.45 }} />
       )}
-      {player && <Marker position={player.pos} icon={car(player.heading, mode === "dispatch" && busy ? GOLD : PLAYER)} />}
+      {player && (
+        <Marker
+          position={player.pos}
+          icon={car(player.heading, mode === "dispatch" && busy ? GOLD : PLAYER, iconOf(ride))}
+        />
+      )}
     </>
   );
 
@@ -515,6 +582,79 @@ export function FleetGames({
               </ul>
             )}
           </div>
+          {/* --- garage ------------------------------------------------- */}
+          <button
+            onClick={() => setGarageOpen((o) => !o)}
+            className="focusable flex items-center justify-between rounded-lg border border-hairline bg-surface/50 px-2 py-1.5 text-left text-[11px] hover:bg-surface-hover"
+          >
+            <span className="truncate">
+              <span className="mr-1">{iconOf(ride)}</span>
+              <b className="text-ink">{ride.brand}</b>{" "}
+              <span className="text-ink-muted">{ride.model}</span>
+            </span>
+            <span className="ml-2 shrink-0 text-ink-faint">{garageOpen ? "▲" : "garage ▾"}</span>
+          </button>
+          <div className="flex items-center justify-between rounded-lg border border-hairline bg-surface/30 px-2 py-1 text-[10px] text-ink-muted">
+            <span>
+              speed <span className="text-accent">{stars(rideStats.speedMul, 1.6)}</span>
+            </span>
+            <span>
+              payout <span className="text-accent">{stars(rideStats.rewardMul, 2.5)}</span>
+            </span>
+            <span className="tnum text-ink-faint">×{rideStats.rewardMul.toFixed(2)}</span>
+          </div>
+          {garageOpen && (
+            <div className="flex flex-col gap-1 rounded-lg border border-hairline bg-surface/40 p-2">
+              <p className="text-[10px] leading-snug text-ink-faint">
+                {rideStats.blurb} Road vehicles only — every course is routed on real roads.
+              </p>
+              <div className="flex flex-wrap gap-1">
+                <button
+                  onClick={() => setGarageCat("")}
+                  className={`focusable rounded-full border px-1.5 py-0.5 text-[10px] ${
+                    garageCat === "" ? "border-accent/60 bg-accent/15 text-ink" : "border-hairline text-ink-muted"
+                  }`}
+                >
+                  All
+                </button>
+                {PLAYABLE_CATEGORIES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setGarageCat(c)}
+                    className={`focusable rounded-full border px-1.5 py-0.5 text-[10px] ${
+                      garageCat === c ? "border-accent/60 bg-accent/15 text-ink" : "border-hairline text-ink-muted"
+                    }`}
+                  >
+                    {categoryLabel(c)}
+                  </button>
+                ))}
+              </div>
+              <ul className="flex max-h-40 flex-col gap-0.5 overflow-auto">
+                {PLAYABLE.filter((c) => !garageCat || categoryOf(c) === garageCat).map((c, i) => {
+                  const s = statsFor(c);
+                  const active = c.brand === ride.brand && c.model === ride.model;
+                  return (
+                    <li key={`${c.brand}-${c.model}-${i}`}>
+                      <button
+                        onClick={() => chooseRide(c)}
+                        className={`focusable flex w-full items-center justify-between rounded-md border px-1.5 py-1 text-[10px] hover:bg-surface-hover ${
+                          active ? "border-accent/60 bg-accent/10 text-ink" : "border-transparent text-ink-muted"
+                        }`}
+                      >
+                        <span className="truncate">
+{carDisplay(c)}
+                        </span>
+                        <span className="ml-2 shrink-0 tabular-nums text-ink-faint">
+                          {s.speedMul.toFixed(2)}× · {s.rewardMul.toFixed(1)}💰
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
           <button onClick={() => startMode("dispatch")} className={BTN}>🚕 Dispatch — deliver before the clock</button>
           <button onClick={() => startMode("tsp")} className={BTN}>🧭 Route Rush — shortest loop</button>
           <button onClick={() => startMode("intercept")} className={BTN}>🎯 Intercept — 20-level road chase</button>
@@ -524,11 +664,23 @@ export function FleetGames({
       {banner && <div className="rounded-lg bg-accent/15 px-2 py-1 text-center text-[11px] font-semibold text-accent">{banner}</div>}
 
       {mode && mode !== "tsp" && (
-        <div className="flex items-center justify-between text-xs">
-          <span className="tnum text-accent">score {score}</span>
-          <span className="tnum text-ink-faint">best {best}</span>
-          <span className={`tnum ${timeLeft <= 10 ? "text-danger" : "text-ink-muted"}`}>⏱ {timeLeft}s</span>
-        </div>
+        <>
+          <div className="flex items-center justify-between text-xs">
+            <span className="tnum text-accent">score {score}</span>
+            <span className="tnum text-ink-faint">best {best}</span>
+            <span className={`tnum ${timeLeft <= 10 ? "text-danger" : "text-ink-muted"}`}>⏱ {timeLeft}s</span>
+          </div>
+          {/* Which vehicle is driving, and the two numbers that change play. */}
+          <div className="flex items-center justify-between rounded-lg border border-hairline bg-surface/30 px-2 py-1 text-[10px] text-ink-muted">
+            <span className="truncate">
+              <span className="mr-1">{iconOf(ride)}</span>
+              {ride.brand} {ride.model}
+            </span>
+            <span className="ml-2 shrink-0 tabular-nums">
+              {rideStats.speedMul.toFixed(2)}× · {rideStats.rewardMul.toFixed(1)}💰
+            </span>
+          </div>
+        </>
       )}
 
       {mode === "intercept" && running && (

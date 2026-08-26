@@ -3,25 +3,79 @@
  * origin, and body type — with filter/sort helpers. Vehicles keep the arrow
  * marker; this just labels them (and powers the car picker).
  */
-export type Domain = "road" | "sea" | "air" | "underwater";
+export type Domain = "road" | "rail" | "sea" | "air" | "underwater";
+
 export type CarType =
+  // road · passenger
   | "sedan"
   | "SUV"
   | "sports"
   | "EV"
-  | "truck"
   | "hatchback"
   | "coupe"
+  | "offroad"
+  // road · two-wheeler
+  | "motorcycle"
+  | "scooter"
+  // road · commercial
+  | "truck"
+  | "semi"
+  | "tanker"
+  | "pickup"
+  | "van"
+  | "dumper"
+  | "mixer"
+  // road · public + emergency
+  | "bus"
+  | "coach"
+  | "ambulance"
+  | "firetruck"
+  | "police"
+  // rail
+  | "highspeed"
+  | "freighttrain"
+  | "metro"
+  | "tram"
+  // sea
   | "ship"
   | "cruise"
   | "ferry"
+  | "container"
+  | "seatanker"
+  | "tug"
+  | "fishing"
+  | "icebreaker"
   | "yacht"
   | "speedboat"
   | "sailboat"
+  // air
   | "airliner"
   | "jet"
+  | "cargoplane"
+  | "seaplane"
   | "helicopter"
+  | "drone"
   | "balloon"
+  // underwater
+  | "submarine"
+  | "submersible"
+  | "rov";
+
+/**
+ * The coarse grouping the picker filters on. `CarType` is the precise body type
+ * (there are 40+); a category is the bucket a person actually thinks in — "show
+ * me trucks" rather than "show me semis, tankers, dumpers and mixers".
+ */
+export type Category =
+  | "car"
+  | "bike"
+  | "truck"
+  | "bus"
+  | "emergency"
+  | "train"
+  | "ship"
+  | "boat"
+  | "aircraft"
   | "submarine";
 
 export interface Car {
@@ -33,7 +87,43 @@ export interface Car {
   icon?: string; // emoji marker; defaults by domain
 }
 
-const DOMAIN_ICON: Record<Domain, string> = { road: "🚗", sea: "🚢", air: "✈️", underwater: "🤿" };
+const DOMAIN_ICON: Record<Domain, string> = {
+  road: "🚗",
+  rail: "🚆",
+  sea: "🚢",
+  air: "✈️",
+  underwater: "🤿",
+};
+
+/** Every CarType maps to exactly one Category. */
+const TYPE_CATEGORY: Record<CarType, Category> = {
+  sedan: "car", SUV: "car", sports: "car", EV: "car", hatchback: "car", coupe: "car", offroad: "car",
+  motorcycle: "bike", scooter: "bike",
+  truck: "truck", semi: "truck", tanker: "truck", pickup: "truck", van: "truck", dumper: "truck", mixer: "truck",
+  bus: "bus", coach: "bus",
+  ambulance: "emergency", firetruck: "emergency", police: "emergency",
+  highspeed: "train", freighttrain: "train", metro: "train", tram: "train",
+  ship: "ship", cruise: "ship", ferry: "ship", container: "ship", seatanker: "ship", tug: "ship",
+  fishing: "ship", icebreaker: "ship",
+  yacht: "boat", speedboat: "boat", sailboat: "boat",
+  airliner: "aircraft", jet: "aircraft", cargoplane: "aircraft", seaplane: "aircraft",
+  helicopter: "aircraft", drone: "aircraft", balloon: "aircraft",
+  submarine: "submarine", submersible: "submarine", rov: "submarine",
+};
+
+const CATEGORY_LABEL: Record<Category, string> = {
+  car: "🚗 Cars",
+  bike: "🏍️ Motorcycles",
+  truck: "🚛 Trucks & Freight",
+  bus: "🚌 Buses",
+  emergency: "🚑 Emergency",
+  train: "🚆 Trains",
+  ship: "🚢 Ships",
+  boat: "🛥️ Boats",
+  aircraft: "✈️ Aircraft",
+  submarine: "🤿 Underwater",
+};
+
 export function domainOf(c: Car): Domain {
   return c.domain ?? "road";
 }
@@ -41,7 +131,24 @@ export function iconOf(c: Car): string {
   return c.icon ?? DOMAIN_ICON[domainOf(c)];
 }
 export function domains(): Domain[] {
-  return ["road", "sea", "air", "underwater"];
+  return ["road", "rail", "sea", "air", "underwater"];
+}
+export function categoryOf(c: Car): Category {
+  return TYPE_CATEGORY[c.type];
+}
+export function categoryLabel(c: Category): string {
+  return CATEGORY_LABEL[c];
+}
+/** Categories actually present in the catalogue, in display order. */
+export function categories(): Category[] {
+  const present = new Set(CARS.map(categoryOf));
+  return (Object.keys(CATEGORY_LABEL) as Category[]).filter((c) => present.has(c));
+}
+/** Types belonging to one category (or all types when no category is given). */
+export function typesIn(category?: string): CarType[] {
+  const all = [...new Set(CARS.map((c) => c.type))];
+  if (!category) return all;
+  return all.filter((t) => TYPE_CATEGORY[t] === category);
 }
 
 const FLAGS: Record<string, string> = {
@@ -170,6 +277,96 @@ export const CARS: Car[] = [
   { brand: "Virginia", model: "Attack Submarine", country: "USA", type: "submarine", domain: "underwater", icon: "🤿" },
   { brand: "Triton", model: "Deep-Sea Submersible", country: "USA", type: "submarine", domain: "underwater", icon: "🤿" },
   { brand: "DeepFlight", model: "Personal Submarine", country: "USA", type: "submarine", domain: "underwater", icon: "🤿" },
+  { brand: "Alvin", model: "DSV Submersible", country: "USA", type: "submersible", domain: "underwater", icon: "🔱" },
+  { brand: "Saab", model: "Seaeye ROV", country: "Sweden", type: "rov", domain: "underwater", icon: "🛰️" },
+
+  // --- road · trucks & freight ------------------------------------------- //
+  { brand: "Volvo", model: "FH16 Semi", country: "Sweden", type: "semi", domain: "road", icon: "🚛" },
+  { brand: "Scania", model: "R730 Hauler", country: "Sweden", type: "semi", domain: "road", icon: "🚛" },
+  { brand: "Mercedes-Benz", model: "Actros Long-Haul", country: "Germany", type: "semi", domain: "road", icon: "🚛" },
+  { brand: "MAN", model: "TGX Freight", country: "Germany", type: "semi", domain: "road", icon: "🚛" },
+  { brand: "Peterbilt", model: "579 Sleeper", country: "USA", type: "semi", domain: "road", icon: "🚛" },
+  { brand: "Kenworth", model: "W990", country: "USA", type: "semi", domain: "road", icon: "🚛" },
+  { brand: "Freightliner", model: "Cascadia", country: "USA", type: "semi", domain: "road", icon: "🚛" },
+  { brand: "Tesla", model: "Semi (Electric)", country: "USA", type: "semi", domain: "road", icon: "🚛" },
+  { brand: "Tata", model: "Prima Hauler", country: "India", type: "truck", domain: "road", icon: "🚚" },
+  { brand: "Ashok Leyland", model: "Boss Cargo", country: "India", type: "truck", domain: "road", icon: "🚚" },
+  { brand: "Isuzu", model: "N-Series Box", country: "Japan", type: "truck", domain: "road", icon: "🚚" },
+  { brand: "Hino", model: "500 Series", country: "Japan", type: "truck", domain: "road", icon: "🚚" },
+  { brand: "Shell", model: "Fuel Tanker", country: "UK", type: "tanker", domain: "road", icon: "🛢️" },
+  { brand: "Bharat Petroleum", model: "LPG Tanker", country: "India", type: "tanker", domain: "road", icon: "🛢️" },
+  { brand: "Ford", model: "F-150 Lightning", country: "USA", type: "pickup", domain: "road", icon: "🛻" },
+  { brand: "Toyota", model: "Hilux", country: "Japan", type: "pickup", domain: "road", icon: "🛻" },
+  { brand: "RAM", model: "1500 TRX", country: "USA", type: "pickup", domain: "road", icon: "🛻" },
+  { brand: "Rivian", model: "R1T", country: "USA", type: "pickup", domain: "road", icon: "🛻" },
+  { brand: "Mercedes-Benz", model: "Sprinter Van", country: "Germany", type: "van", domain: "road", icon: "🚐" },
+  { brand: "Ford", model: "Transit Courier", country: "USA", type: "van", domain: "road", icon: "🚐" },
+  { brand: "Caterpillar", model: "777 Dump Truck", country: "USA", type: "dumper", domain: "road", icon: "🚜" },
+  { brand: "Komatsu", model: "HD785 Dumper", country: "Japan", type: "dumper", domain: "road", icon: "🚜" },
+  { brand: "Schwing", model: "Concrete Mixer", country: "Germany", type: "mixer", domain: "road", icon: "🚧" },
+
+  // --- road · buses ------------------------------------------------------- //
+  { brand: "Mercedes-Benz", model: "Citaro City Bus", country: "Germany", type: "bus", domain: "road", icon: "🚌" },
+  { brand: "Volvo", model: "7900 Electric Bus", country: "Sweden", type: "bus", domain: "road", icon: "🚌" },
+  { brand: "BYD", model: "K9 Electric Bus", country: "China", type: "bus", domain: "road", icon: "🚌" },
+  { brand: "Tata", model: "Starbus City", country: "India", type: "bus", domain: "road", icon: "🚌" },
+  { brand: "Setra", model: "S 531 DT Coach", country: "Germany", type: "coach", domain: "road", icon: "🚍" },
+  { brand: "Volvo", model: "9700 Intercity Coach", country: "Sweden", type: "coach", domain: "road", icon: "🚍" },
+
+  // --- road · emergency --------------------------------------------------- //
+  { brand: "Mercedes-Benz", model: "Sprinter Ambulance", country: "Germany", type: "ambulance", domain: "road", icon: "🚑" },
+  { brand: "Ford", model: "E-450 Ambulance", country: "USA", type: "ambulance", domain: "road", icon: "🚑" },
+  { brand: "Rosenbauer", model: "Panther Fire Truck", country: "Austria", type: "firetruck", domain: "road", icon: "🚒" },
+  { brand: "Pierce", model: "Enforcer Pumper", country: "USA", type: "firetruck", domain: "road", icon: "🚒" },
+  { brand: "Ford", model: "Police Interceptor", country: "USA", type: "police", domain: "road", icon: "🚓" },
+  { brand: "BMW", model: "5 Series Polizei", country: "Germany", type: "police", domain: "road", icon: "🚓" },
+
+  // --- road · two-wheelers ------------------------------------------------ //
+  { brand: "Ducati", model: "Panigale V4", country: "Italy", type: "motorcycle", domain: "road", icon: "🏍️" },
+  { brand: "Harley-Davidson", model: "Road Glide", country: "USA", type: "motorcycle", domain: "road", icon: "🏍️" },
+  { brand: "Royal Enfield", model: "Himalayan", country: "India", type: "motorcycle", domain: "road", icon: "🏍️" },
+  { brand: "Kawasaki", model: "Ninja H2", country: "Japan", type: "motorcycle", domain: "road", icon: "🏍️" },
+  { brand: "BMW", model: "R 1250 GS", country: "Germany", type: "motorcycle", domain: "road", icon: "🏍️" },
+  { brand: "Vespa", model: "GTS 300", country: "Italy", type: "scooter", domain: "road", icon: "🛵" },
+  { brand: "Honda", model: "Activa", country: "Japan", type: "scooter", domain: "road", icon: "🛵" },
+
+  // --- road · off-road ---------------------------------------------------- //
+  { brand: "Jeep", model: "Wrangler Rubicon", country: "USA", type: "offroad", domain: "road", icon: "🚙" },
+  { brand: "Land Rover", model: "Defender 110", country: "UK", type: "offroad", domain: "road", icon: "🚙" },
+  { brand: "Mahindra", model: "Thar", country: "India", type: "offroad", domain: "road", icon: "🚙" },
+
+  // --- rail --------------------------------------------------------------- //
+  { brand: "JR Central", model: "N700S Shinkansen", country: "Japan", type: "highspeed", domain: "rail", icon: "🚅" },
+  { brand: "SNCF", model: "TGV InOui", country: "France", type: "highspeed", domain: "rail", icon: "🚅" },
+  { brand: "Deutsche Bahn", model: "ICE 4", country: "Germany", type: "highspeed", domain: "rail", icon: "🚅" },
+  { brand: "CRRC", model: "Fuxing CR400AF", country: "China", type: "highspeed", domain: "rail", icon: "🚅" },
+  { brand: "Indian Railways", model: "Vande Bharat", country: "India", type: "highspeed", domain: "rail", icon: "🚅" },
+  { brand: "Renfe", model: "AVE S-103", country: "Spain", type: "highspeed", domain: "rail", icon: "🚅" },
+  { brand: "Union Pacific", model: "Big Boy Freight", country: "USA", type: "freighttrain", domain: "rail", icon: "🚂" },
+  { brand: "BNSF", model: "Intermodal Freight", country: "USA", type: "freighttrain", domain: "rail", icon: "🚂" },
+  { brand: "DB Cargo", model: "Vectron Freight", country: "Germany", type: "freighttrain", domain: "rail", icon: "🚂" },
+  { brand: "London Underground", model: "2024 Stock", country: "UK", type: "metro", domain: "rail", icon: "🚇" },
+  { brand: "Delhi Metro", model: "Movia Rapid", country: "India", type: "metro", domain: "rail", icon: "🚇" },
+  { brand: "Alstom", model: "Citadis Tram", country: "France", type: "tram", domain: "rail", icon: "🚊" },
+
+  // --- sea · commercial --------------------------------------------------- //
+  { brand: "MSC", model: "Irina Container Ship", country: "Italy", type: "container", domain: "sea", icon: "🚢" },
+  { brand: "Evergreen", model: "Ever Ace", country: "China", type: "container", domain: "sea", icon: "🚢" },
+  { brand: "CMA CGM", model: "Jacques Saadé", country: "France", type: "container", domain: "sea", icon: "🚢" },
+  { brand: "Frontline", model: "VLCC Crude Tanker", country: "Norway", type: "seatanker", domain: "sea", icon: "🛢️" },
+  { brand: "QatarEnergy", model: "Q-Max LNG Carrier", country: "Qatar", type: "seatanker", domain: "sea", icon: "🛢️" },
+  { brand: "Damen", model: "ASD Harbour Tug", country: "Netherlands", type: "tug", domain: "sea", icon: "🛟" },
+  { brand: "Nordic", model: "Deep-Sea Trawler", country: "Norway", type: "fishing", domain: "sea", icon: "🎣" },
+  { brand: "Rosatom", model: "Arktika Icebreaker", country: "Russia", type: "icebreaker", domain: "sea", icon: "🧊" },
+
+  // --- air · cargo & utility ---------------------------------------------- //
+  { brand: "Boeing", model: "747-8 Freighter", country: "USA", type: "cargoplane", domain: "air", icon: "🛫" },
+  { brand: "Antonov", model: "An-124 Ruslan", country: "Ukraine", type: "cargoplane", domain: "air", icon: "🛫" },
+  { brand: "Airbus", model: "BelugaXL", country: "France", type: "cargoplane", domain: "air", icon: "🛫" },
+  { brand: "de Havilland", model: "Twin Otter Seaplane", country: "Canada", type: "seaplane", domain: "air", icon: "🛩️" },
+  { brand: "ICON", model: "A5 Amphibian", country: "USA", type: "seaplane", domain: "air", icon: "🛩️" },
+  { brand: "DJI", model: "Matrice Cargo Drone", country: "China", type: "drone", domain: "air", icon: "🛸" },
+  { brand: "Zipline", model: "Delivery Drone", country: "USA", type: "drone", domain: "air", icon: "🛸" },
 ];
 
 export function brands(): string[] {
@@ -184,6 +381,7 @@ export function types(): CarType[] {
 
 export interface CarFilter {
   domain?: string;
+  category?: string;
   brand?: string;
   country?: string;
   type?: string;
@@ -195,10 +393,11 @@ export function filterCars(f: CarFilter): Car[] {
   return CARS.filter(
     (c) =>
       (!f.domain || domainOf(c) === f.domain) &&
+      (!f.category || categoryOf(c) === f.category) &&
       (!f.brand || c.brand === f.brand) &&
       (!f.country || c.country === f.country) &&
       (!f.type || c.type === f.type) &&
-      (!q || `${c.brand} ${c.model}`.toLowerCase().includes(q)),
+      (!q || `${c.brand} ${c.model} ${c.type}`.toLowerCase().includes(q)),
   ).sort((a, b) => a.brand.localeCompare(b.brand) || a.model.localeCompare(b.model));
 }
 
@@ -208,6 +407,7 @@ export function randomCar(): Car {
 
 const BY_DOMAIN: Record<Domain, Car[]> = {
   road: CARS.filter((c) => domainOf(c) === "road"),
+  rail: CARS.filter((c) => domainOf(c) === "rail"),
   sea: CARS.filter((c) => domainOf(c) === "sea"),
   air: CARS.filter((c) => domainOf(c) === "air"),
   underwater: CARS.filter((c) => domainOf(c) === "underwater"),

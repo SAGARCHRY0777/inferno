@@ -313,10 +313,20 @@ export function FleetMap() {
               style={{ background: "#0A0B0F" }}
               zoomControl={false}
             >
+              {/*
+                Standard OpenStreetMap tiles, darkened in CSS (.map-tiles-dark).
+
+                CARTO's dark_all basemap used to be keyless; it now stamps
+                "API KEY REQUIRED" diagonally across every tile while still
+                returning HTTP 200 — so the map silently rendered defaced rather
+                than failing. OSM's standard tiles need no key, and a CSS filter
+                gets the dark look back without a third-party dependency.
+              */}
               <TileLayer
                 noWrap
-                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                attribution='&copy; OpenStreetMap &copy; CARTO'
+                className="map-tiles-dark"
+                url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               />
               <PlanPicker active={planMode} onPick={onPick} />
               {/* Worldwide fleet — only the in-view vehicles are stepped + drawn. */}
@@ -407,7 +417,8 @@ export function FleetMap() {
               </div>
               {tripStatus === "failed" && (
                 <p className="text-[11px] text-danger">
-                  Couldn’t route those stops — try nearby addresses.
+                  No drivable road route between those stops. Routing is road-only,
+                  so stops must be on the same landmass and near a road.
                 </p>
               )}
               {trip && (
@@ -544,7 +555,7 @@ export function FleetMap() {
               {planMode && (
                 <p className="text-[11px] text-ink-faint">
                   {planStatus === "planning" && "routing along real roads…"}
-                  {planStatus === "failed" && "routing unavailable — straight line"}
+                  {planStatus === "failed" && "no road route between these points — direct line"}
                   {planStatus === "idle" && (planned ? "real-road route drawn ✓" : `${picks.length}/2 points`)}
                 </p>
               )}

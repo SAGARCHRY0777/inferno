@@ -75,6 +75,10 @@ chase).</sub>
 > **Deep dive:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the full request
 > lifecycle, every subsystem (what/how/why-this-not-that), the key design
 > decisions, and limitations & future work.
+>
+> **Serving your own model:** [`docs/BRING-YOUR-OWN-MODEL.md`](docs/BRING-YOUR-OWN-MODEL.md)
+> — Hugging Face, ONNX, YOLO and Whisper weights need no code, just a `models.yaml`
+> entry and a worker; writing a new `kind` is one file.
 
 ```
         ┌──────────────────────────────────────────────────────────┐

@@ -174,10 +174,47 @@ export function osrmUrl(waypoints: LatLng[]): string {
   return `${OSRM_BASE}/${coords}?overview=full&geometries=geojson&steps=false`;
 }
 
+/**
+ * How far OSRM may move a requested point onto the road network before we stop
+ * believing the answer, in metres.
+ *
+ * `code: "Ok"` is NOT sufficient. OSRM snaps every waypoint to the nearest road
+ * with no distance limit, so a point that has no road anywhere near it still
+ * produces a confident-looking route between two completely different places.
+ * Measured against the live demo server:
+ *
+ *   • Two mid-Atlantic points both snapped to the SAME street in Brazil (500 km
+ *     and 1,277 km away) and returned a route of length 0 m.
+ *   • London -> New York snapped New York 5,534 km onto another continent and
+ *     returned a "2,149 km" road route across the ocean.
+ *
+ * 25 km is generous for a real road trip (remote trailheads, islands with
+ * ferries) while rejecting both cases above by orders of magnitude.
+ */
+const MAX_SNAP_M = 25_000;
+
+interface OsrmWaypoint {
+  distance?: number; // metres the input point was moved onto the road network
+}
+
+/** Reject routes OSRM only produced by teleporting a waypoint onto a far road. */
+function snapIsPlausible(waypoints: OsrmWaypoint[] | undefined): boolean {
+  if (!waypoints?.length) return true; // nothing to check (older/other servers)
+  return waypoints.every((w) => (w.distance ?? 0) <= MAX_SNAP_M);
+}
+
 export function osrmToLatLngs(data: unknown): LatLng[] {
-  const d = data as { code?: string; routes?: { geometry: { coordinates: [number, number][] } }[] };
+  const d = data as {
+    code?: string;
+    waypoints?: OsrmWaypoint[];
+    routes?: { distance?: number; geometry: { coordinates: [number, number][] } }[];
+  };
   if (d.code !== "Ok" || !d.routes?.length) throw new Error(`OSRM ${d.code ?? "no route"}`);
-  return d.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng] as LatLng);
+  if (!snapIsPlausible(d.waypoints)) throw new Error("OSRM snapped a waypoint off-network");
+  const coords = d.routes[0].geometry.coordinates;
+  // A degenerate 1-point geometry means both ends collapsed to the same node.
+  if (coords.length < 2) throw new Error("OSRM returned a degenerate route");
+  return coords.map(([lng, lat]) => [lat, lng] as LatLng);
 }
 
 /**
@@ -232,9 +269,17 @@ export async function routeThrough(stops: LatLng[], timeoutMs = 12000): Promise<
   try {
     const res = await fetch(osrmUrl(stops), { signal: ctrl.signal });
     if (!res.ok) return null;
-    const d = (await res.json()) as { code?: string; routes?: OsrmRoute[] };
+    const d = (await res.json()) as {
+      code?: string;
+      waypoints?: OsrmWaypoint[];
+      routes?: OsrmRoute[];
+    };
     if (d.code !== "Ok" || !d.routes?.length) return null;
+    // Same guard as osrmToLatLngs: "Ok" alone lets a waypoint snapped onto
+    // another continent through as a confident, entirely fictional trip.
+    if (!snapIsPlausible(d.waypoints)) return null;
     const r = d.routes[0];
+    if (r.geometry.coordinates.length < 2) return null;
     return {
       geometry: r.geometry.coordinates.map(([lng, lat]) => [lat, lng] as LatLng),
       distanceM: r.distance,

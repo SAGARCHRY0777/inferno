@@ -100,6 +100,22 @@
   transition: none;
 }
 
+/* Dark basemap without a third-party key.
+   CARTO's dark_all tiles now watermark "API KEY REQUIRED" across every tile
+   (while still returning 200), so the map is served from OpenStreetMap's own
+   keyless tiles and darkened here instead. invert+hue-rotate flips the light
+   basemap to dark while keeping road/label legibility; the trailing brightness
+   and saturate calm the result so our cyan markers stay the brightest thing
+   on screen. Only the tiles are filtered -- markers and overlays are siblings,
+   so they are unaffected. */
+.map-tiles-dark {
+  /* saturate() is doing the important work: a plain invert turns OSM's warm
+     road casings pink and its blue water teal. Pulling saturation right down
+     lands on a near-neutral grey canvas, which also keeps the cyan/green/red
+     fleet markers the most saturated thing on screen. */
+  filter: invert(1) hue-rotate(180deg) saturate(0.22) brightness(0.88) contrast(0.92);
+}
+
 /* Honor reduced-motion: disable non-essential animation. */
 @media (prefers-reduced-motion: reduce) {
   *,

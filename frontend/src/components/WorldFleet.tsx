@@ -23,7 +23,15 @@ export interface WorldApi {
 const iconCache = new Map<string, L.DivIcon>();
 
 function icon(v: WorldVehicle): L.DivIcon {
-  const key = `${domainOf(v.car)}:${Math.round(v.heading / 5) * 5}`;
+  // The key must capture everything buildIcon actually renders:
+  //  • road   -> one arrow shape, ROTATED by heading (quantised to 5°).
+  //  • others -> a per-vehicle emoji with NO rotation, so heading is irrelevant
+  //              but the emoji is not — keying on domain alone would render every
+  //              ship, tanker, trawler and icebreaker with the same glyph.
+  const key =
+    domainOf(v.car) === "road"
+      ? `road:${Math.round(v.heading / 5) * 5}`
+      : `glyph:${iconOf(v.car)}`;
   const hit = iconCache.get(key);
   if (hit) return hit;
   const made = buildIcon(v);
