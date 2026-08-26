@@ -223,6 +223,50 @@ Non-vehicle classes (person, traffic light…) are skipped.
 Verified end to end in a browser: 9 labels including one `person` → the fleet
 grew by **exactly 8**, with the person skipped and no page errors.
 
+### 🛣️ Mode of transport is now respected
+
+Vehicles moved by straight-line interpolation between endpoints, which meant
+**cars flew over buildings and across the bay, and ferries sailed overland.**
+
+* **Road** — local traffic now follows **real OSRM road geometry**. One dense
+  circuit is fetched per view and shared by every local vehicle there (throttled
+  to well under the demo server's 1 req/s, cached per quantised view, with a
+  straight-line fallback so the map never stalls waiting on the network). Because
+  every point on a road polyline is on an actual street, this fixes both
+  complaints at once: vehicles follow roads *and* can no longer spawn in water.
+* **Sea** — crossings route through the nearest open-ocean waypoint instead of
+  chording across continents. Coastal hops (< 12°) stay direct, since detouring a
+  harbour ferry into the middle of an ocean would be far worse.
+* **Air** — unchanged; a straight line between airports is correct.
+
+Verified in a browser: **12/12 sampled vehicles changed heading** repeatedly
+(5–12 distinct headings each) — i.e. they turn corners, which a straight-line
+vehicle never does.
+
+#### The antimeridian bug this uncovered
+
+Distance was raw Euclidean on lat/lng, so Shanghai (121°E) → Los Angeles (118°W)
+measured **240°** — the long way through Europe and Africa — instead of the real
+120° Pacific crossing. That inflated figure let the sea-lane picker route a
+**Pacific voyage via the Mediterranean** and still pass its detour check at 1.99x.
+
+Fixed by making longitude distance wrap-aware and tightening the detour cap from
+2x to 1.45x. Every route is now geographically sound:
+
+| Route | Before | After |
+|---|---|---|
+| Shanghai → Los Angeles | **via Mediterranean** | via N Pacific (1.00x) |
+| Mumbai → Singapore | straight through India | via Bay of Bengal (1.01x) |
+| Rotterdam → New York | chord across land | via N Atlantic (1.01x) |
+| Santos → Durban | chord | via S Atlantic (1.00x) |
+| Hamburg → Antwerp | direct | direct (coastal hop) |
+
+### 🟡 Detected vehicles are visually distinct
+
+Vehicles spawned from a YOLO detection render **gold and slightly larger**;
+ambient traffic stays cyan. The model's output is now legible at a glance — you
+can see exactly which vehicles came out of the photo you submitted.
+
 ### ⚡ `priority` stopped being a lie
 
 The API accepted `priority: 0-9`, carried it all the way into Redis, and then

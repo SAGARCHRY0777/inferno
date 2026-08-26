@@ -62,11 +62,42 @@ export interface WorldVehicle {
   heading: number;
   speedDeg: number; // degrees per simulated second
   cargo: string;
+  /**
+   * Dense real-road polyline this vehicle drives along, when it has one.
+   *
+   * Intercity/air/sea legs are straight lines between endpoints, which is
+   * correct for a plane or a ship. For a CAR at city zoom it is very obviously
+   * wrong — you watch it fly over buildings and across the bay. Local road
+   * traffic therefore carries actual OSRM road geometry and walks it segment by
+   * segment. Absent = fall back to straight-line interpolation.
+   */
+  path?: LatLng[];
+  /** Index of the current segment within `path`. */
+  seg?: number;
+  /**
+   * Whether `path` is a closed circuit to drive round forever (local road
+   * traffic) or a one-shot journey (a sea crossing, which must end at the
+   * destination port and then pick a new leg).
+   */
+  pathLoops?: boolean;
 }
 
 const rnd = (n: number) => Math.floor(Math.random() * n);
 const pick = <T,>(a: T[]): T => a[rnd(a.length)];
-const degDist = (a: LatLng, b: LatLng) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+/**
+ * Shortest longitude difference, accounting for the ±180° seam.
+ *
+ * Raw subtraction makes Shanghai (121°E) -> Los Angeles (118°W) look 240° apart
+ * — the long way round, through Europe and Africa — when the real Pacific
+ * crossing is 120°. That inflated distance is not just cosmetic: it made the
+ * sea-lane picker route a Pacific voyage via the *Mediterranean* and still pass
+ * its detour check.
+ */
+const lngDelta = (a: number, b: number) => {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+};
+const degDist = (a: LatLng, b: LatLng) => Math.hypot(a[0] - b[0], lngDelta(a[1], b[1]));
 
 function endpoints(domain: Domain): Loc[] {
   // Rail shares the city list: intercity trains run station-to-station between
@@ -180,10 +211,50 @@ function destFor(from: LatLng, domain: Domain, t: CarType): Loc {
   return (cands.length ? pick(cands) : pick(endpoints(domain)));
 }
 
+/**
+ * A sea leg routed through open water instead of straight across continents.
+ *
+ * A straight port-to-port line is wrong in the obvious way: Mumbai -> Singapore
+ * drawn as a chord ploughs through peninsular India and Malaysia, so ships and
+ * ferries appear to sail overland. Real marine routing needs sea-lane data we
+ * do not have, but inserting the nearest open-ocean waypoint between the two
+ * ports approximates a shipping lane well enough that vessels stay on water for
+ * the whole crossing.
+ *
+ * Short coastal hops (a harbour ferry) are left as a direct line — detouring
+ * those through the middle of an ocean would be far worse than the straight leg.
+ */
+function seaPathBetween(from: LatLng, to: LatLng): LatLng[] | undefined {
+  const direct = degDist(from, to);
+  if (direct < 12) return undefined; // coastal hop: a straight line is fine
+
+  // Pick the ocean waypoint that adds the least detour — i.e. the one closest to
+  // lying "between" the two ports.
+  let best: Loc | null = null;
+  let bestCost = Infinity;
+  for (const o of OCEAN) {
+    const w: LatLng = [o[0], o[1]];
+    const cost = degDist(from, w) + degDist(w, to);
+    if (cost < bestCost) {
+      bestCost = cost;
+      best = o;
+    }
+  }
+  // Reject a waypoint that isn't genuinely *on the way*. 2x was far too lenient
+  // — a Pacific crossing squeaked through via the Mediterranean at 1.99x. A real
+  // shipping lane detours modestly around landmasses, so cap it at 1.45x.
+  if (!best || bestCost > direct * 1.45) return undefined;
+  return [from, [best[0], best[1]], to];
+}
+
 function startLeg(v: WorldVehicle): WorldVehicle {
   const dest = destFor(v.to, v.domain, v.car.type);
   const from = v.to;
   const to: LatLng = [dest[0], dest[1]];
+  // Sea traffic follows an open-water lane; air/rail/road keep their direct leg
+  // (a great-circle-ish line is correct for a plane, and road traffic gets real
+  // OSRM geometry via spawnLocal).
+  const path = v.domain === "sea" ? seaPathBetween(from, to) : undefined;
   return {
     ...v,
     from,
@@ -191,6 +262,9 @@ function startLeg(v: WorldVehicle): WorldVehicle {
     fromName: v.toName,
     toName: dest[2],
     legLen: Math.max(0.5, degDist(from, to)),
+    path,
+    seg: path ? 0 : undefined,
+    pathLoops: path ? false : undefined, // a crossing ends at the port
     t: 0,
     pos: from,
     heading: bearing(from, to),
@@ -209,6 +283,7 @@ export function makeWorldFleet(n: number): WorldVehicle[] {
     const from: LatLng = [o[0], o[1]];
     const dest = destFor(from, domain, car.type);
     const to: LatLng = [dest[0], dest[1]];
+    const seaPath = domain === "sea" ? seaPathBetween(from, to) : undefined;
     const t = Math.random();
     out.push({
       id: `WV-${i}`,
@@ -219,6 +294,9 @@ export function makeWorldFleet(n: number): WorldVehicle[] {
       fromName: o[2],
       toName: dest[2],
       legLen: Math.max(0.5, degDist(from, to)),
+      path: seaPath,
+      seg: seaPath ? 0 : undefined,
+      pathLoops: seaPath ? false : undefined,
       t,
       pos: [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t],
       heading: bearing(from, to),
@@ -229,7 +307,55 @@ export function makeWorldFleet(n: number): WorldVehicle[] {
   return out;
 }
 
+/** Walk a vehicle along its polyline. Returns null once a one-shot path ends. */
+function stepAlongPath(v: WorldVehicle, dt: number): WorldVehicle | null {
+  const path = v.path!;
+  const loops = v.pathLoops !== false;
+  const last = path.length - 1;
+  let seg = v.seg ?? 0;
+  let t = v.t;
+  // Budget in degrees for this tick, converted to a fraction of each segment as
+  // we consume it — so speed is consistent regardless of segment length.
+  let remaining = v.speedDeg * dt;
+
+  for (let guard = 0; guard < 64 && remaining > 0; guard++) {
+    const a = path[seg];
+    const b = path[loops ? (seg + 1) % path.length : Math.min(seg + 1, last)];
+    const segLen = Math.max(degDist(a, b), 1e-9);
+    const left = (1 - t) * segLen;
+    if (remaining < left) {
+      t += remaining / segLen;
+      remaining = 0;
+    } else {
+      remaining -= left;
+      if (!loops && seg + 1 >= last) return null; // arrived — caller starts a new leg
+      seg = loops ? (seg + 1) % path.length : seg + 1;
+      t = 0;
+    }
+  }
+
+  const a = path[seg];
+  const b = path[loops ? (seg + 1) % path.length : Math.min(seg + 1, last)];
+  return {
+    ...v,
+    seg,
+    t,
+    pos: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
+    heading: bearing(a, b),
+  };
+}
+
 export function stepWorldVehicle(v: WorldVehicle, dt: number): WorldVehicle {
+  // Follow real geometry when we have it: road vehicles walk actual streets and
+  // ships follow an open-water lane, instead of cutting across whatever happens
+  // to lie between their endpoints.
+  if (v.path && v.path.length > 1) {
+    const moved = stepAlongPath(v, dt);
+    if (moved) return moved;
+    // A one-shot path finished (a ship reached port) -> pick the next leg.
+    return startLeg({ ...v, to: v.path[v.path.length - 1], path: undefined, seg: undefined });
+  }
+
   const t = v.t + (v.speedDeg * dt) / v.legLen;
   if (t >= 1) {
     // Local traffic keeps circulating locally. Without this it would take a
@@ -255,16 +381,52 @@ export function stepWorldVehicle(v: WorldVehicle, dt: number): WorldVehicle {
  * `spreadDeg` should be roughly the visible radius, so trips stay in frame long
  * enough to watch.
  */
-export function spawnLocal(center: LatLng, spreadDeg = 0.05, withCar?: Car): WorldVehicle {
+export function spawnLocal(
+  center: LatLng,
+  spreadDeg = 0.05,
+  withCar?: Car,
+  roadPath?: LatLng[],
+): WorldVehicle {
   const jitter = (): LatLng => [
     center[0] + (Math.random() - 0.5) * spreadDeg * 2,
     center[1] + (Math.random() - 0.5) * spreadDeg * 2,
   ];
   const car = withCar ?? randomCarOf("road");
+
+  // Preferred path: real road geometry from OSRM. Every point on it is on an
+  // actual street, which fixes BOTH complaints at once — the vehicle follows
+  // roads instead of flying over them, and it can never spawn in the bay,
+  // because a road polyline is never in the water.
+  if (roadPath && roadPath.length > 1) {
+    const seg = rnd(roadPath.length - 1);
+    const a = roadPath[seg];
+    const b = roadPath[seg + 1];
+    return {
+      id: `WL-${rnd(1e9)}`, // WL = local, so the culler can retire these first
+      car,
+      domain: "road",
+      from: a,
+      to: b,
+      fromName: "local",
+      toName: "local",
+      legLen: Math.max(0.004, degDist(a, b)),
+      path: roadPath,
+      seg,
+      pathLoops: true, // a local circuit: drive it round rather than ending
+      t: Math.random(), // stagger so they don't all start from the same point
+      pos: a,
+      heading: bearing(a, b),
+      speedDeg: speedFor(car.type) * 0.05 * (0.7 + Math.random() * 0.6),
+      cargo: cargoFor(car),
+    };
+  }
+
+  // Fallback only: no road geometry yet (OSRM slow/unreachable). Straight-line
+  // local hop, so the map still has motion instead of sitting empty.
   const from = jitter();
   const to = jitter();
   return {
-    id: `WL-${rnd(1e9)}`, // WL = local, so the culler can retire these first
+    id: `WL-${rnd(1e9)}`,
     car,
     domain: "road",
     from,
@@ -272,7 +434,7 @@ export function spawnLocal(center: LatLng, spreadDeg = 0.05, withCar?: Car): Wor
     fromName: "local",
     toName: "local",
     legLen: Math.max(0.004, degDist(from, to)),
-    t: Math.random(), // stagger so they don't all start from the same instant
+    t: Math.random(),
     pos: from,
     heading: bearing(from, to),
     // Local streets, not intercity: scale the catalogue speed right down so a
@@ -284,7 +446,23 @@ export function spawnLocal(center: LatLng, spreadDeg = 0.05, withCar?: Car): Wor
 
 /** True for a vehicle created by {@link spawnLocal}. */
 export function isLocal(v: WorldVehicle): boolean {
-  return v.id.startsWith("WL-");
+  return v.id.startsWith("WL-") || v.id.startsWith("WD-");
+}
+
+/**
+ * True for a vehicle spawned from a YOLO detection.
+ *
+ * Rendered gold rather than cyan so the model's output is visually separable
+ * from ambient traffic — you can see exactly which vehicles came out of the
+ * photo you submitted.
+ */
+export function isDetected(v: WorldVehicle): boolean {
+  return v.id.startsWith("WD-");
+}
+
+/** Tag a locally-spawned vehicle as coming from a detection. */
+export function asDetected(v: WorldVehicle): WorldVehicle {
+  return { ...v, id: v.id.replace(/^WL-/, "WD-"), fromName: "detected", toName: "detected" };
 }
 
 export function spawnAt(center: LatLng, car?: Car): WorldVehicle {

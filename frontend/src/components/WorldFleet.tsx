@@ -3,8 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 
 import { type Car, carDisplay, domainOf, flag, iconOf, randomCarOfCategory } from "@/lib/cars";
-import { categoryForDetection } from "@/lib/fleet";
+import { categoryForDetection, type LatLng, routeThrough } from "@/lib/fleet";
 import {
+  asDetected,
+  isDetected,
   isLocal,
   makeWorldFleet,
   spawnAt,
@@ -19,6 +21,14 @@ const CAP = 240; // max markers rendered at once (keeps DOM/RAM flat at any zoom
 const FLEET_SIZE = 1400;
 /** Below this many vehicles on screen, seed local traffic so the map is alive. */
 const MIN_IN_VIEW = 18;
+/** The public OSRM demo asks for <=1 req/s; stay well under it. */
+const ROAD_FETCH_MIN_MS = 2500;
+/** Re-seed the view roughly every 5s (TICK=120ms) so it never thins out. */
+const TOPUP_EVERY_TICKS = 40;
+/** Ambient traffic. */
+const CYAN = "#00E5FF";
+/** Vehicles spawned from a YOLO detection, so the model's output stands out. */
+const GOLD = "#FFB020";
 /** Ceiling on seeded local vehicles, so panning around can't grow the fleet forever. */
 const MAX_LOCAL = 400;
 
@@ -48,7 +58,7 @@ function icon(v: WorldVehicle): L.DivIcon {
   //              ship, tanker, trawler and icebreaker with the same glyph.
   const key =
     domainOf(v.car) === "road"
-      ? `road:${Math.round(v.heading / 5) * 5}`
+      ? `road:${isDetected(v) ? "det" : "amb"}:${Math.round(v.heading / 5) * 5}`
       : `glyph:${iconOf(v.car)}`;
   const hit = iconCache.get(key);
   if (hit) return hit;
@@ -59,13 +69,20 @@ function icon(v: WorldVehicle): L.DivIcon {
 
 function buildIcon(v: WorldVehicle): L.DivIcon {
   if (domainOf(v.car) === "road") {
+    // Gold = spawned from a YOLO detection, cyan = ambient traffic. This makes
+    // the model's output legible at a glance: you can see exactly which vehicles
+    // came out of the photo you submitted.
+    const colour = isDetected(v) ? GOLD : CYAN;
+    const size = isDetected(v) ? 14 : 11;
     return L.divIcon({
       className: "av-marker",
-      iconSize: [11, 11],
-      iconAnchor: [5.5, 5.5],
-      html: `<div style="transform:rotate(${v.heading}deg);filter:drop-shadow(0 0 3px #00E5FF)">
-        <svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 1 L13 14 L8 11 L3 14 Z"
-        fill="#00E5FF" stroke="#0A0B0F" stroke-width="0.7"/></svg></div>`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+      html: `<div style="transform:rotate(${v.heading}deg);filter:drop-shadow(0 0 ${
+        isDetected(v) ? 5 : 3
+      }px ${colour})">
+        <svg width="${size}" height="${size}" viewBox="0 0 16 16"><path d="M8 1 L13 14 L8 11 L3 14 Z"
+        fill="${colour}" stroke="#0A0B0F" stroke-width="0.7"/></svg></div>`,
     });
   }
   return L.divIcon({
@@ -98,6 +115,48 @@ export function WorldFleet({
   if (fleet.current.length === 0) fleet.current = makeWorldFleet(FLEET_SIZE);
   const [visible, setVisible] = useState<WorldVehicle[]>([]);
   const lastCount = useRef(-1);
+
+  // --- real road geometry for local traffic -------------------------------- //
+  // One dense OSRM circuit per view, shared by every local vehicle there. This
+  // is what stops cars flying over buildings and water: every point on the
+  // polyline is on an actual street.
+  //
+  // Exactly ONE request per new view, throttled — the public OSRM demo server
+  // asks for <=1 req/s (see scripts/prefetch-routes.mjs), so a request per
+  // vehicle would be abusive and slow.
+  const roadLoop = useRef<LatLng[] | null>(null);
+  const roadKey = useRef<string>("");
+  const roadFetching = useRef(false);
+  const lastRoadFetch = useRef(0);
+
+  const ensureRoadLoop = async (center: LatLng, spread: number) => {
+    // Quantise the view so small pans reuse the same circuit.
+    const key = `${center[0].toFixed(2)},${center[1].toFixed(2)},${spread.toFixed(2)}`;
+    if (key === roadKey.current || roadFetching.current) return;
+    if (Date.now() - lastRoadFetch.current < ROAD_FETCH_MIN_MS) return;
+    // Above a city-ish zoom the streets aren't visible anyway, and a "circuit"
+    // spanning half a continent is meaningless.
+    if (spread > 0.35) return;
+
+    roadFetching.current = true;
+    lastRoadFetch.current = Date.now();
+    try {
+      const r = spread * 0.6;
+      const ring: LatLng[] = [0, 1, 2, 3].map((i) => {
+        const angle = (i / 4) * Math.PI * 2 + Math.random() * 0.4;
+        return [center[0] + Math.sin(angle) * r, center[1] + Math.cos(angle) * r];
+      });
+      const plan = await routeThrough([...ring, ring[0]]);
+      if (plan && plan.geometry.length > 8) {
+        roadLoop.current = plan.geometry;
+        roadKey.current = key;
+      }
+    } catch {
+      /* keep whatever circuit we already had; straight-line fallback covers it */
+    } finally {
+      roadFetching.current = false;
+    }
+  };
 
   const cull = (step: boolean) => {
     const b = map.getBounds();
@@ -143,8 +202,14 @@ export function WorldFleet({
     );
     if (inView >= MIN_IN_VIEW) return;
 
+    // Kick off (or reuse) a real road circuit for this view. The first spawn
+    // after a pan may still be straight-line; once the geometry lands, every
+    // subsequent vehicle drives actual streets.
+    void ensureRoadLoop([c.lat, c.lng], spread);
+    const roads = roadLoop.current;
+
     for (let i = inView; i < MIN_IN_VIEW; i++) {
-      arr.push(spawnLocal([c.lat, c.lng], spread));
+      arr.push(spawnLocal([c.lat, c.lng], spread, undefined, roads ?? undefined));
     }
     // Bound the growth from panning around: retire the oldest LOCAL vehicles
     // first so the worldwide fleet itself is never culled.
@@ -174,7 +239,14 @@ export function WorldFleet({
           const category = categoryForDetection(label);
           if (!category) continue; // not a vehicle class (person, traffic light, ...)
           fleet.current.push(
-            spawnLocal([c.lat, c.lng], spread, randomCarOfCategory(category)),
+            asDetected(
+              spawnLocal(
+                [c.lat, c.lng],
+                spread,
+                randomCarOfCategory(category),
+                roadLoop.current ?? undefined,
+              ),
+            ),
           );
           spawned++;
         }
@@ -196,7 +268,14 @@ export function WorldFleet({
   // animate the in-view vehicles
   useEffect(() => {
     if (hidden || paused) return;
-    const id = window.setInterval(() => cull(true), TICK);
+    let tick = 0;
+    const id = window.setInterval(() => {
+      cull(true);
+      // Top the view up periodically, not only on pan/zoom: local vehicles drive
+      // off the edge of the circuit over time, so a stationary view would slowly
+      // empty out again. ~every 5s is far below the OSRM throttle.
+      if (++tick % TOPUP_EVERY_TICKS === 0) ensureLocalTraffic();
+    }, TICK);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hidden, paused]);
