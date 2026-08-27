@@ -46,7 +46,7 @@ jobs:
         run: python -m evals gate --retriever lexical --out reports/lexical.json
       - name: Upload the report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eval-report-lexical
           path: reports/lexical.json
@@ -116,7 +116,7 @@ jobs:
         run: python -m evals gate --retriever rag --out reports/rag.json
       - name: Upload the report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eval-report-rag
           path: reports/rag.json
