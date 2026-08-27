@@ -300,6 +300,52 @@ Covered by 12 new tests, including a guard that fails if the express-first lane
 ordering is ever flipped — without it, priority would silently stop working while
 every routing test still passed.
 
+### 🔒 Dependency security: 35 advisories → 4 tracked exceptions
+
+The repo had **no dependency automation of any kind**. A scan on 2026-08-28 found
+far more than the single torch CVE noted earlier:
+
+| File | Before | After | How |
+|---|---|---|---|
+| `requirements.txt` | **19** advisories (starlette, python-multipart, mcp, pytest) | **0** | fastapi 0.115→0.141, starlette 0.41→1.6, mcp 1.2→1.29, python-multipart, pytest, pydantic |
+| `requirements-ml-*.txt` | **16** advisories (pillow, onnx, transformers) | **4**, all tracked | pillow 11→12.3, onnx 1.17→1.22, transformers 4.47→4.57 |
+
+**Every core bump is verified, not assumed** — the full suite passes against the
+upgraded stack. Three things that only surfaced by actually trying it:
+
+* **mcp 2.x breaks the code.** It renamed `FastMCP` → `MCPServer`, so a blind
+  "latest" bump fails at import. Pinned to the 1.x line, which still clears every
+  advisory. The pin now carries that reason.
+* **`tokenizers==0.23.0` does not exist** (only an rc). transformers 4.57 needs
+  `>=0.22.0,<=0.23.0`; 0.22.2 is the highest real release.
+* **`onnxruntime-gpu==1.20.1` was pulled from PyPI.** Only 1.20.0 and 1.20.2
+  remain — so `pip install -r requirements-ml-gpu.txt` **failed outright**, as did
+  the lock file that claimed to be the verified environment. Fixed to 1.20.2.
+
+The 4 remaining are documented in the workflow with their reasons:
+`PYSEC-2026-2288/2289/2290` need transformers 5.x, which
+`sentence-transformers 3.3.1` forbids (`transformers<5.0.0`), and `PYSEC-2025-217`
+has no published fix. They are ignored **explicitly** rather than left to fail —
+a permanently red job trains everyone to ignore it, and then a genuinely new
+advisory goes unnoticed too.
+
+Shipped: `.github/dependabot.yml` (grouped pip/npm/actions updates) and
+`.github/workflows/security.yml` (`pip-audit` + `npm audit`, weekly and on
+dependency PRs). It is a **separate workflow from CI on purpose**: CI gates
+merges and drives the deploy chain, so a vulnerable pin that cannot be fixed
+today should not block shipping an unrelated bug fix — but it must still be loud.
+
+### 📐 HLD + LLD in the README
+
+The architecture section was one ASCII box diagram. It now carries a **HLD**
+(process/deployment view: what runs where, and why the gateway never loads a
+model) and an **LLD** (a numbered `POST /infer` sequence covering validation,
+quota, backpressure, cache hit, express-lane routing, batching, publish-before-ack
+and result fan-out), plus a batching-window diagram — all as Mermaid, which
+GitHub renders natively. Each is followed by a table explaining *why* the design
+is that way, not just what the arrows do. All three verified by rendering them
+with `mermaid-cli`.
+
 ### 🤖 The MCP server is now deployable — and actually tested
 
 Nine working agent tools existed but **nothing deployed or exercised them**: no

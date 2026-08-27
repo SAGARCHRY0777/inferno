@@ -115,6 +115,126 @@ The gateway and workers **never import Redis directly** — they depend on the
 `AsyncBroker` / `WorkerBroker` interfaces in [`backend/broker/base.py`](backend/broker/base.py).
 The Redis Streams implementation lives behind them, so the transport is swappable.
 
+### HLD — high-level design
+
+Every box is an independently deployable process. The only shared state is Redis;
+nothing else talks to anything else directly.
+
+```mermaid
+flowchart TB
+    UI["🖥️ React console<br/><i>submit · dashboard · fleet</i>"]
+    AGENT["🤖 MCP client<br/><i>Claude Desktop / agent SDK</i>"]
+
+    subgraph edge["Edge — stateless · never runs a model"]
+        direction LR
+        GW["FastAPI Gateway<br/><i>validate · auth · backpressure<br/>enqueue · fan out results</i>"]
+        MCP["MCP Server<br/><i>models as agent tools</i>"]
+        CHAT["Chat Service<br/><i>local LLM · SSE · RAG</i>"]
+    end
+
+    subgraph bus["Redis — broker · bus · shared state"]
+        direction LR
+        LANES["Job streams<br/><i>one lane per model<br/>+ express lane</i>"]
+        RESULTS["Pub/Sub + TTL'd keys<br/><i>late-join safe</i>"]
+        OBS["Counters · heartbeats<br/><i>metrics + liveness</i>"]
+    end
+
+    POOL["⚙️ Worker pool — N independent processes<br/><i>one model each · dynamic batching · graceful drain</i>"]
+
+    UI -->|"REST + WebSocket"| GW
+    UI -->|"SSE"| CHAT
+    AGENT -->|"stdio / SSE"| MCP
+    MCP -->|"public REST/WS only"| GW
+    CHAT -->|"retrieval"| GW
+
+    GW -->|"XADD"| LANES
+    RESULTS -->|"pmessage"| GW
+    OBS -->|"depth · workers"| GW
+
+    LANES -->|"XREADGROUP"| POOL
+    POOL -->|"PUBLISH + SET"| RESULTS
+    POOL -->|"INCR · heartbeat"| OBS
+```
+
+**Why it is shaped like this**
+
+| Decision | Consequence |
+| --- | --- |
+| Gateway never loads a model | It stays async and cheap; a wedged model can't take the API down |
+| One stream per model | Every job in a batch window is already the same model — no filtering |
+| Broker behind an interface | Redis is swappable for Kafka/NATS without touching business logic |
+| MCP and Chat are API clients | They deploy, scale and fail independently of the gateway |
+
+### LLD — the request lifecycle, end to end
+
+What actually happens to one `POST /infer`, including the paths that make it
+survive failure.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant G as Gateway
+    participant R as Redis
+    participant W as Worker
+
+    C->>G: POST /infer {model, input, priority}
+    G->>G: Pydantic validation (422 on bad input)
+    G->>G: auth + per-client quota
+    G->>R: XLEN both lanes → queue depth
+    alt depth > high_watermark
+        G-->>C: 429 + Retry-After (hysteresis)
+    else admitted
+        G->>R: GET result cache (model+input hash)
+        alt cache hit
+            G-->>C: 202 → result delivered instantly
+        else miss
+            G->>R: XADD to express OR normal lane (by priority)
+            G-->>C: 202 Accepted {job_id, result_ws}
+            C->>G: WS /ws/{job_id}
+            G->>R: register waiter (one pattern subscription for all jobs)
+
+            W->>R: XREADGROUP [express, normal] — express first
+            Note over W: batch window opens:<br/>fill until max_batch_size<br/>OR max_batch_wait_ms
+            W->>W: preprocess → ONE forward pass → postprocess
+            W->>R: PUBLISH result + SET result key (TTL)
+            W->>R: XACK + XDEL  ← publish BEFORE ack
+            R-->>G: pmessage
+            G-->>C: result frame, then close
+        end
+    end
+```
+
+**The details that matter**
+
+| Step | Why it's built that way |
+| --- | --- |
+| **Publish before ack** | A crash in the gap leaves entries *pending* and reclaimable — duplicates are possible, lost work is not |
+| **Express lane read first** | Redis Streams are append-only FIFO, so priority is *routing*, not sorting. Both lanes are read in one `XREADGROUP`, so the normal lane can't starve |
+| **One pattern subscription** | The gateway holds `inferno:result:*` once, not one Redis connection per waiting client — connection use stays flat into the thousands |
+| **TTL'd result key** | A client that reconnects late still gets its answer; `result_ttl_s` is validated to be ≥ `job_timeout_s` |
+| **Reclaim + delivery cap** | Entries idle past `reclaim_min_idle_ms` are re-claimed by another worker; after `max_deliveries` they are dead-lettered so a poison payload can't crash-loop the fleet |
+| **Watchdog** | A forward pass that never returns ends the process, so the supervisor restarts it — a hung C call cannot be interrupted from Python |
+
+#### Batching — the throughput/latency lever
+
+```mermaid
+flowchart LR
+    A["blocking read<br/><i>first job</i>"] --> B{"window open"}
+    B -->|"more jobs<br/>available"| C["append to batch"]
+    C --> B
+    B -->|"max_batch_size<br/>reached"| D["close window"]
+    B -->|"max_batch_wait_ms<br/>elapsed"| D
+    D --> E["ONE forward pass<br/><i>batch of N</i>"]
+    E --> F["N results,<br/>input order preserved"]
+```
+
+An idle worker costs nothing (it blocks on the first job). Under load the window
+fills and one forward pass serves many clients — which is why `batch_size` climbs
+on the dashboard as you drive load. Results are validated to be 1:1 with inputs
+before mapping back, so a model that returns the wrong count fails loudly rather
+than handing callers each other's answers.
+
 ---
 
 ## Quickstart (Windows — the primary workflow)

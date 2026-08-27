@@ -8,19 +8,19 @@
 #
 # Pinned to the exact versions verified on Python 3.10 (conda env `test`).
 # --------------------------------------------------------------------------- #
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-starlette==0.41.3
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+starlette==1.6.0
 redis==5.2.1
-pydantic==2.10.4
-pydantic-settings==2.7.1
+pydantic==2.13.4
+pydantic-settings==2.15.0
 structlog==24.4.0
 prometheus-client==0.21.1
 psutil==6.1.1
 PyYAML==6.0.2
-python-multipart==0.0.20
-websockets==14.1
-anyio==4.7.0
+python-multipart==0.0.32
+websockets==17.1
+anyio==4.14.2
 
 # Optional GPU telemetry. The import is guarded, so this is safe on CPU-only
 # hosts (it simply reports no GPUs). Tiny, pure-Python NVML bindings.
@@ -32,13 +32,15 @@ opentelemetry-sdk==1.29.0
 opentelemetry-exporter-otlp-proto-http==1.29.0
 opentelemetry-instrumentation-fastapi==0.50b0
 
-# MCP server (exposes the models as agent tools). sse-starlette is pinned to a
-# version compatible with FastAPI's starlette (<0.42); newer ones conflict.
-mcp==1.2.0
-sse-starlette==1.8.2
+# MCP server (exposes the models as agent tools). Kept on the 1.x line ON
+# PURPOSE: mcp 2.x renamed FastMCP -> MCPServer, so backend/mcp_server/server.py
+# does not import under it. 1.29.1 clears every advisory that affected 1.2.0.
+# sse-starlette 3.x is the line that targets starlette 1.x.
+mcp==1.29.1
+sse-starlette==3.4.8
 
 # Test + load-test tooling.
 httpx==0.28.1
-pytest==8.3.4
-pytest-asyncio==0.25.1
+pytest==9.1.1
+pytest-asyncio==1.4.0
 locust==2.32.4

@@ -1,0 +1,102 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# 🔒 Dependency audit
+#
+# Deliberately a SEPARATE workflow, not a step inside CI:
+#   * CI gates merges and drives the deploy chain. A known-vulnerable pin that
+#     cannot be fixed today shouldn't block shipping an unrelated bug fix.
+#   * But it must still be loud. So this runs on its own, fails honestly when
+#     advisories exist, and shows red in the Actions tab until they're dealt with.
+#
+# It does NOT use `|| true` or `continue-on-error` anywhere — a green run here
+# genuinely means no known advisories in the audited sets.
+#
+# Fixing what it reports is Dependabot's job (see .github/dependabot.yml); this
+# workflow is the detector, not the remedy.
+# ─────────────────────────────────────────────────────────────────────────────
+name: 🔒 Security
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC, alongside Dependabot's run
+  pull_request:
+    paths:
+      - "requirements*.txt"
+      - "frontend/package*.json"
+      - ".github/workflows/security.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip "pip-audit==2.7.3"
+
+      # Audited without installing: --no-deps resolves the pins as written, so a
+      # broken transitive graph can't mask the direct dependencies we control.
+      - name: Audit core runtime dependencies
+        run: pip-audit -r requirements.txt --progress-spinner off
+
+      # KNOWN, TRACKED EXCEPTIONS — reviewed 2026-08-28.
+      #
+      # The ML pins were bumped as far as their own constraints allow
+      # (transformers 4.47.1 -> 4.57.6, onnx 1.17 -> 1.22, pillow 11 -> 12.3),
+      # which cleared 30+ advisories. These four cannot follow:
+      #
+      #   PYSEC-2026-2288 / -2289 / -2290  fixed only in transformers 5.x, and
+      #       sentence-transformers 3.3.1 pins `transformers<5.0.0` — so 5.x
+      #       needs sentence-transformers upgraded in the same change, which
+      #       cannot be validated without a GPU box and the full ML stack.
+      #   PYSEC-2025-217                   no fixed version published upstream.
+      #
+      # Ignored *explicitly* rather than left to fail: a permanently red job
+      # trains everyone to ignore it, and then a genuinely new advisory goes
+      # unnoticed too. Green here means "nothing new since this review".
+      # Dependabot opens the upgrade PRs (see .github/dependabot.yml); delete an
+      # ignore as soon as its upgrade lands and the ML suite passes.
+      #
+      # NOTE: torch itself is not audited here — the pins are local `+cpu` /
+      # `+cu124` builds that PyPI does not host, so pip-audit skips them. Track
+      # CVE-2025-32434 (RCE via torch.load, fixed in 2.6.0) by hand.
+      - name: Audit CPU ML stack
+        run: |
+          pip-audit -r requirements-ml-cpu.txt --progress-spinner off \
+            --ignore-vuln PYSEC-2025-217 \
+            --ignore-vuln PYSEC-2026-2288 \
+            --ignore-vuln PYSEC-2026-2289 \
+            --ignore-vuln PYSEC-2026-2290
+
+      - name: Audit GPU ML stack
+        run: |
+          pip-audit -r requirements-ml-gpu.txt --progress-spinner off \
+            --ignore-vuln PYSEC-2025-217 \
+            --ignore-vuln PYSEC-2026-2288 \
+            --ignore-vuln PYSEC-2026-2289 \
+            --ignore-vuln PYSEC-2026-2290
+
+  node:
+    name: npm audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # Production dependencies only at high severity: a dev-only advisory in the
+      # build toolchain is worth a Dependabot PR, not a red pipeline.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

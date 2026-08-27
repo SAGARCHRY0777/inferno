@@ -1,0 +1,55 @@
+# Automated dependency updates.
+#
+# The repo had no dependency automation at all, so pins quietly aged: a scan on
+# 2026-08-27 found 19 advisories across 4 packages in requirements.txt alone
+# (starlette, python-multipart, mcp, pytest), plus CVE-2025-32434 in the pinned
+# torch. Nothing in the project would ever have surfaced the next one.
+#
+# Grouped so you get a few reviewable PRs instead of a swarm of single-pin bumps.
+version: 2
+
+updates:
+  # --- Python ---------------------------------------------------------------- #
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python"]
+    groups:
+      # Web stack moves together: FastAPI pins a starlette range, so bumping one
+      # without the other produces an uninstallable combination.
+      web:
+        patterns: ["fastapi", "starlette", "uvicorn*", "python-multipart", "websockets", "httpx"]
+      ml:
+        patterns: ["torch*", "torchvision", "onnxruntime*", "ultralytics", "transformers", "sentence-transformers", "faster-whisper"]
+      observability:
+        patterns: ["opentelemetry*", "prometheus-client", "structlog"]
+      dev:
+        patterns: ["pytest*", "ruff", "mypy", "locust"]
+
+  # --- Frontend -------------------------------------------------------------- #
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "frontend"]
+    groups:
+      react:
+        patterns: ["react", "react-dom", "@types/react*"]
+      build:
+        patterns: ["vite", "@vitejs/*", "typescript", "eslint*", "@typescript-eslint/*"]
+      runtime:
+        patterns: ["leaflet", "react-leaflet", "framer-motion", "recharts", "zustand"]
+
+  # --- GitHub Actions -------------------------------------------------------- #
+  # Pinned action versions go stale too, and a deprecated runner image is a
+  # silent CI failure waiting to happen.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels: ["dependencies", "ci"]
