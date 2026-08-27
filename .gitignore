@@ -63,3 +63,6 @@ frontend/vite.config.d.ts
 # and must never be committed.
 tools/*.err
 tools/*.out
+
+# Eval reports written by `python -m evals run --out`.
+reports/

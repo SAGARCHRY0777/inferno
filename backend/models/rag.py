@@ -25,23 +25,10 @@ from backend.core.errors import InferenceError, ModelLoadError
 from backend.core.logging import get_logger
 from backend.core.schemas import Prediction
 from backend.models.base import BaseModel
+from backend.models.chunking import DEFAULT_CORPUS_DIR, chunk_markdown
 from backend.models.registry import register_kind
 
 _log = get_logger("model.rag")
-
-_DEFAULT_CORPUS = Path(__file__).resolve().parent / "corpus"
-
-
-def _chunk_markdown(text: str) -> list[str]:
-    """Split a markdown doc into passages: non-heading paragraphs, trimmed."""
-
-    chunks: list[str] = []
-    for block in text.split("\n\n"):
-        block = " ".join(block.split())  # collapse whitespace
-        if not block or block.startswith("#"):
-            continue
-        chunks.append(block)
-    return chunks
 
 
 @register_kind("rag-search")
@@ -61,7 +48,7 @@ class RagSearch(BaseModel):
         self._rerank = bool(self.params.get("rerank", True))
         device = resolve_torch_device()
 
-        corpus_dir = Path(self.params.get("corpus_dir", _DEFAULT_CORPUS))
+        corpus_dir = Path(self.params.get("corpus_dir", DEFAULT_CORPUS_DIR))
         if not corpus_dir.exists():
             raise ModelLoadError(f"corpus dir not found: {corpus_dir}")
 
@@ -69,7 +56,7 @@ class RagSearch(BaseModel):
         self._passages: list[str] = []
         self._sources: list[str] = []
         for path in sorted(corpus_dir.glob("*.md")):
-            for chunk in _chunk_markdown(path.read_text(encoding="utf-8")):
+            for chunk in chunk_markdown(path.read_text(encoding="utf-8")):
                 self._passages.append(chunk)
                 self._sources.append(path.name)
         if not self._passages:

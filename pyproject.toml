@@ -44,6 +44,8 @@ addopts = "-q -ra"
 markers = [
     "integration: end-to-end tests that require a running Redis (auto-skip if absent)",
     "ml: tests that require the heavy ML stack (torch/onnx/transformers)",
+    "failure: fault-injection tests that kill real worker processes (need Redis)",
+    "slow: tests whose runtime is dominated by process startup and reclaim waits",
 ]
 
 [tool.ruff]

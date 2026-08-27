@@ -1,0 +1,1012 @@
+{
+  "by_bucket": {
+    "architecture": {
+      "n": 9,
+      "primary": 0.8889
+    },
+    "multi_chunk": {
+      "n": 3,
+      "primary": 1.0
+    },
+    "observability": {
+      "n": 5,
+      "primary": 0.8
+    },
+    "paraphrase": {
+      "n": 8,
+      "primary": 0.75
+    },
+    "retrieval": {
+      "n": 9,
+      "primary": 1.0
+    },
+    "serving": {
+      "n": 10,
+      "primary": 1.0
+    },
+    "unanswerable": {
+      "n": 6,
+      "primary": 1.0
+    }
+  },
+  "corpus_hash": "b962a80f10bb7d3d",
+  "dataset_hash": "1c640984a773dc3f",
+  "failures": [
+    "rag-006",
+    "rag-030",
+    "rag-035",
+    "rag-036"
+  ],
+  "interval": {
+    "primary": [
+      0.8116,
+      0.9685
+    ]
+  },
+  "items": [
+    {
+      "abstain": null,
+      "bucket": "architecture",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-001",
+      "mrr": 1.0,
+      "question": "What happens to an inference job immediately after a client submits it over the REST API?",
+      "recall": 1.0,
+      "retrieved": [
+        "inferno-architecture:0",
+        "inference-serving:1",
+        "inference-serving:3",
+        "inferno-architecture:4",
+        "retrieval-and-observability:1"
+      ],
+      "top_score": 0.625
+    },
+    {
+      "abstain": null,
+      "bucket": "architecture",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-002",
+      "mrr": 0.3333333333333333,
+      "question": "How does a client receive its result without having to poll for it?",
+      "recall": 1.0,
+      "retrieved": [
+        "inferno-architecture:4",
+        "inference-serving:3",
+        "inferno-architecture:0",
+        "retrieval-and-observability:2",
+        "inference-serving:2"
+      ],
+      "top_score": 0.384615
+    },
+    {
+      "abstain": null,
+      "bucket": "architecture",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-003",
+      "mrr": 1.0,
+      "question": "Does the gateway ever load or execute models itself?",
+      "recall": 1.0,
+      "retrieved": [
+        "inferno-architecture:1",
+        "inference-serving:1",
+        "inference-serving:0",
+        "inference-serving:3",
+        "inferno-architecture:3"
+      ],
+      "top_score": 0.444444
+    },
+    {
+      "abstain": null,
+      "bucket": "architecture",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-004",
+      "mrr": 1.0,
+      "question": "What is involved in scaling the gateway tier?",
+      "recall": 1.0,
+      "retrieved": [
+        "inferno-architecture:1",
+        "inferno-architecture:0",
+        "inferno-architecture:2",
+        "inferno-architecture:4",
+        "retrieval-and-observability:0"
+      ],
+      "top_score": 0.5
+    },
+    {
+      "abstain": null,
+      "bucket": "architecture",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-005",
+      "mrr": 1.0,
+      "question": "What do worker processes share with one another?",
+      "recall": 1.0,
+      "retrieved": [
+        "inferno-architecture:2",
+        "inferno-architecture:0",
+        "inferno-architecture:3",
+        "inference-serving:0",
+        "inference-serving:1"
+      ],
+      "top_score": 0.5
+    },
+    {
+      "abstain": null,
+      "bucket": "architecture",
+      "grounded": 0.0,
+      "hit": 0.0,
+      "id": "rag-006",
+      "mrr": 0.0,
+      "question": "How many models does a single worker load when it starts up?",
+      "recall": 0.0,
+      "retrieved": [
+        "inference-serving:1",
+        "inferno-architecture:1",
+        "inferno-architecture:4",
+        "inference-serving:0",
+        "inference-serving:2"
+      ],
+      "top_score": 0.416667
+    },
+    {
+      "abstain": null,
+      "bucket": "architecture",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-007",
+      "mrr": 1.0,
+      "question": "Which Redis primitive backs the job queue?",
+      "recall": 1.0,
+      "retrieved": [
+        "inferno-architecture:3",
+        "inferno-architecture:0",
+        "inferno-architecture:4",
+        "inference-serving:1",
+        "inference-serving:3"
+      ],
+      "top_score": 0.571429
+    },
+    {
+      "abstain": null,
+      "bucket": "architecture",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-008",
+      "mrr": 1.0,
+      "question": "If a worker dies in the middle of a batch, what becomes of the entries it had not acknowledged?",
+      "recall": 1.0,
+      "retrieved": [
+        "inferno-architecture:3",
+        "inferno-architecture:0",
+        "inference-serving:0",
+        "inference-serving:1",
+        "inference-serving:5"
+      ],
+      "top_score": 0.4375
+    },
+    {
+      "abstain": null,
+      "bucket": "architecture",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-009",
+      "mrr": 1.0,
+      "question": "By what path do results travel from the workers back to the gateway?",
+      "recall": 1.0,
+      "retrieved": [
+        "inferno-architecture:4",
+        "inference-serving:1",
+        "inference-serving:3",
+        "inferno-architecture:1",
+        "retrieval-and-observability:1"
+      ],
+      "top_score": 0.416667
+    },
+    {
+      "abstain": null,
+      "bucket": "serving",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-010",
+      "mrr": 1.0,
+      "question": "What does dynamic request batching actually do?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:0",
+        "inferno-architecture:0",
+        "inference-serving:2",
+        "inference-serving:4",
+        "retrieval-and-observability:3"
+      ],
+      "top_score": 0.428571
+    },
+    {
+      "abstain": null,
+      "bucket": "serving",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-011",
+      "mrr": 1.0,
+      "question": "What conditions close a batch window?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:0",
+        "inference-serving:5",
+        "inferno-architecture:3",
+        "inference-serving:1",
+        "inference-serving:2"
+      ],
+      "top_score": 0.5
+    },
+    {
+      "abstain": null,
+      "bucket": "serving",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-012",
+      "mrr": 1.0,
+      "question": "Which HTTP status code and header does the gateway return when it sheds load?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:1",
+        "inferno-architecture:1",
+        "retrieval-and-observability:1",
+        "inference-serving:2",
+        "inference-serving:3"
+      ],
+      "top_score": 0.642857
+    },
+    {
+      "abstain": null,
+      "bucket": "serving",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-013",
+      "mrr": 1.0,
+      "question": "Why does backpressure use two separate marks rather than one threshold?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:1",
+        "inference-serving:2",
+        "inference-serving:4",
+        "inferno-architecture:1",
+        "inferno-architecture:2"
+      ],
+      "top_score": 0.181818
+    },
+    {
+      "abstain": null,
+      "bucket": "serving",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-014",
+      "mrr": 1.0,
+      "question": "Continuous batching goes by another name - what is it?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:2",
+        "inferno-architecture:0",
+        "retrieval-and-observability:1",
+        "inference-serving:0",
+        "inference-serving:1"
+      ],
+      "top_score": 0.444444
+    },
+    {
+      "abstain": null,
+      "bucket": "serving",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-015",
+      "mrr": 1.0,
+      "question": "At what point in generation can a continuous-batching server admit or drop a request?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:2",
+        "inference-serving:0",
+        "inference-serving:3",
+        "inferno-architecture:0",
+        "inference-serving:4"
+      ],
+      "top_score": 0.571429
+    },
+    {
+      "abstain": null,
+      "bucket": "serving",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-016",
+      "mrr": 1.0,
+      "question": "Which numeric formats are given as quantization targets?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:3",
+        "retrieval-and-observability:0",
+        "retrieval-and-observability:3",
+        "inferno-architecture:2",
+        "inferno-architecture:4"
+      ],
+      "top_score": 0.25
+    },
+    {
+      "abstain": null,
+      "bucket": "serving",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-017",
+      "mrr": 1.0,
+      "question": "How does speculative decoding accelerate generation?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:3",
+        "inference-serving:2",
+        "inferno-architecture:4",
+        "retrieval-and-observability:0",
+        "inference-serving:0"
+      ],
+      "top_score": 0.5
+    },
+    {
+      "abstain": null,
+      "bucket": "serving",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-018",
+      "mrr": 1.0,
+      "question": "When does a result cache return without recomputing anything?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:4",
+        "inference-serving:1",
+        "inference-serving:3",
+        "inference-serving:5",
+        "inferno-architecture:0"
+      ],
+      "top_score": 0.444444
+    },
+    {
+      "abstain": null,
+      "bucket": "serving",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-019",
+      "mrr": 1.0,
+      "question": "What does graceful shutdown do when a worker gets a termination signal?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:5",
+        "retrieval-and-observability:4",
+        "inference-serving:0",
+        "inference-serving:1",
+        "inference-serving:4"
+      ],
+      "top_score": 0.636364
+    },
+    {
+      "abstain": null,
+      "bucket": "retrieval",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-020",
+      "mrr": 1.0,
+      "question": "What is retrieval-augmented generation?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:0",
+        "inference-serving:2",
+        "inference-serving:0",
+        "inference-serving:3",
+        "inference-serving:4"
+      ],
+      "top_score": 0.8
+    },
+    {
+      "abstain": null,
+      "bucket": "retrieval",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-021",
+      "mrr": 0.3333333333333333,
+      "question": "What are the stages of a typical RAG pipeline?",
+      "recall": 1.0,
+      "retrieved": [
+        "inferno-architecture:2",
+        "inferno-architecture:4",
+        "retrieval-and-observability:0",
+        "inference-serving:1",
+        "inferno-architecture:0"
+      ],
+      "top_score": 0.444444
+    },
+    {
+      "abstain": null,
+      "bucket": "retrieval",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-022",
+      "mrr": 1.0,
+      "question": "What does supplying retrieved passages as context buy you?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:0",
+        "retrieval-and-observability:3",
+        "retrieval-and-observability:2",
+        "retrieval-and-observability:4",
+        "inference-serving:0"
+      ],
+      "top_score": 0.333333
+    },
+    {
+      "abstain": null,
+      "bucket": "retrieval",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-023",
+      "mrr": 1.0,
+      "question": "How does a bi-encoder handle the query and the documents?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:1",
+        "retrieval-and-observability:0",
+        "inferno-architecture:4",
+        "inference-serving:0",
+        "inference-serving:1"
+      ],
+      "top_score": 0.6
+    },
+    {
+      "abstain": null,
+      "bucket": "retrieval",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-024",
+      "mrr": 1.0,
+      "question": "Why is a cross-encoder reranker run over only a small candidate list?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:1",
+        "inference-serving:2",
+        "inferno-architecture:0",
+        "inference-serving:0",
+        "inference-serving:4"
+      ],
+      "top_score": 0.583333
+    },
+    {
+      "abstain": null,
+      "bucket": "retrieval",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-025",
+      "mrr": 1.0,
+      "question": "Which similarity measure is used to search precomputed document vectors?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:1",
+        "inference-serving:3",
+        "inference-serving:4",
+        "retrieval-and-observability:0",
+        "retrieval-and-observability:2"
+      ],
+      "top_score": 0.7
+    },
+    {
+      "abstain": null,
+      "bucket": "retrieval",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-026",
+      "mrr": 1.0,
+      "question": "Which vector databases are named as examples?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:2",
+        "retrieval-and-observability:0",
+        "retrieval-and-observability:1",
+        "inference-serving:3",
+        "inferno-architecture:2"
+      ],
+      "top_score": 0.428571
+    },
+    {
+      "abstain": null,
+      "bucket": "retrieval",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-027",
+      "mrr": 1.0,
+      "question": "What do Matryoshka embeddings make possible?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:2",
+        "retrieval-and-observability:1",
+        "inference-serving:0",
+        "inference-serving:1",
+        "inference-serving:2"
+      ],
+      "top_score": 0.333333
+    },
+    {
+      "abstain": null,
+      "bucket": "retrieval",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-028",
+      "mrr": 1.0,
+      "question": "What kind of search do vector databases perform at scale?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:2",
+        "inferno-architecture:2",
+        "inference-serving:1",
+        "inference-serving:2",
+        "inferno-architecture:0"
+      ],
+      "top_score": 0.7
+    },
+    {
+      "abstain": null,
+      "bucket": "observability",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-029",
+      "mrr": 1.0,
+      "question": "Which tool scrapes the numeric metrics, and which one draws the graphs?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:3",
+        "inference-serving:3",
+        "inferno-architecture:2",
+        "inferno-architecture:4",
+        "retrieval-and-observability:0"
+      ],
+      "top_score": 0.5
+    },
+    {
+      "abstain": null,
+      "bucket": "observability",
+      "grounded": 0.0,
+      "hit": 0.0,
+      "id": "rag-030",
+      "mrr": 0.0,
+      "question": "Which latency percentiles are called out for dashboards?",
+      "recall": 0.0,
+      "retrieved": [
+        "inference-serving:0",
+        "inference-serving:2",
+        "inference-serving:3",
+        "inferno-architecture:2",
+        "inferno-architecture:4"
+      ],
+      "top_score": 0.25
+    },
+    {
+      "abstain": null,
+      "bucket": "observability",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-031",
+      "mrr": 1.0,
+      "question": "What role does OpenTelemetry play across services?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:3",
+        "inferno-architecture:3",
+        "inference-serving:0",
+        "inference-serving:1",
+        "inference-serving:2"
+      ],
+      "top_score": 0.428571
+    },
+    {
+      "abstain": null,
+      "bucket": "observability",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-032",
+      "mrr": 1.0,
+      "question": "What signal can a horizontal pod autoscaler use to size the worker pool?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:4",
+        "inference-serving:0",
+        "inferno-architecture:0",
+        "retrieval-and-observability:1",
+        "inference-serving:3"
+      ],
+      "top_score": 0.461538
+    },
+    {
+      "abstain": null,
+      "bucket": "observability",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-033",
+      "mrr": 1.0,
+      "question": "What is carbon-aware scheduling?",
+      "recall": 1.0,
+      "retrieved": [
+        "retrieval-and-observability:4",
+        "inference-serving:2",
+        "inference-serving:0",
+        "inference-serving:4",
+        "inferno-architecture:0"
+      ],
+      "top_score": 0.8
+    },
+    {
+      "abstain": null,
+      "bucket": "paraphrase",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-034",
+      "mrr": 1.0,
+      "question": "How does the system stop itself from being swamped when far too much work arrives at once?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:1",
+        "inferno-architecture:3",
+        "inference-serving:2",
+        "inference-serving:5",
+        "inferno-architecture:2"
+      ],
+      "top_score": 0.294118
+    },
+    {
+      "abstain": null,
+      "bucket": "paraphrase",
+      "grounded": 0.0,
+      "hit": 0.0,
+      "id": "rag-035",
+      "mrr": 0.0,
+      "question": "Can a submitted task quietly disappear if the process handling it crashes halfway through?",
+      "recall": 0.0,
+      "retrieved": [
+        "inferno-architecture:4",
+        "retrieval-and-observability:1",
+        "inference-serving:1",
+        "inference-serving:2",
+        "inferno-architecture:1"
+      ],
+      "top_score": 0.285714
+    },
+    {
+      "abstain": null,
+      "bucket": "paraphrase",
+      "grounded": 0.0,
+      "hit": 0.0,
+      "id": "rag-036",
+      "mrr": 0.0,
+      "question": "Is there a way to make a model smaller and faster while barely hurting how good its answers are?",
+      "recall": 0.0,
+      "retrieved": [
+        "inferno-architecture:0",
+        "inferno-architecture:2",
+        "inferno-architecture:4",
+        "retrieval-and-observability:2",
+        "inference-serving:0"
+      ],
+      "top_score": 0.277778
+    },
+    {
+      "abstain": null,
+      "bucket": "paraphrase",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-037",
+      "mrr": 0.25,
+      "question": "During a rolling deploy, what keeps already-started work from being thrown away?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:0",
+        "inference-serving:1",
+        "inference-serving:4",
+        "inference-serving:5",
+        "retrieval-and-observability:3"
+      ],
+      "top_score": 0.153846
+    },
+    {
+      "abstain": null,
+      "bucket": "paraphrase",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-038",
+      "mrr": 0.2,
+      "question": "Why do two sentences that mean roughly the same thing end up close together numerically?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:0",
+        "inference-serving:3",
+        "inferno-architecture:2",
+        "inferno-architecture:4",
+        "retrieval-and-observability:1"
+      ],
+      "top_score": 0.133333
+    },
+    {
+      "abstain": null,
+      "bucket": "paraphrase",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-039",
+      "mrr": 0.5,
+      "question": "How does the front door avoid piling up more and more connections as the number of waiting callers grows?",
+      "recall": 1.0,
+      "retrieved": [
+        "inferno-architecture:2",
+        "inferno-architecture:4",
+        "inference-serving:1",
+        "inference-serving:3",
+        "inferno-architecture:0"
+      ],
+      "top_score": 0.235294
+    },
+    {
+      "abstain": null,
+      "bucket": "paraphrase",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-040",
+      "mrr": 1.0,
+      "question": "Can an earlier reply be reused when the new wording is not exactly the same?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:4",
+        "retrieval-and-observability:1",
+        "inference-serving:0",
+        "inferno-architecture:0",
+        "inferno-architecture:2"
+      ],
+      "top_score": 0.357143
+    },
+    {
+      "abstain": null,
+      "bucket": "paraphrase",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-041",
+      "mrr": 0.3333333333333333,
+      "question": "One model cannot keep up with demand. What is the fix?",
+      "recall": 1.0,
+      "retrieved": [
+        "inference-serving:3",
+        "inferno-architecture:0",
+        "inferno-architecture:2",
+        "inference-serving:0",
+        "inference-serving:2"
+      ],
+      "top_score": 0.363636
+    },
+    {
+      "abstain": null,
+      "bucket": "multi_chunk",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-042",
+      "mrr": 1.0,
+      "question": "Follow a job end to end: which Redis mechanism carries it on the way in, and which one carries the answer back out?",
+      "recall": 0.6666666666666666,
+      "retrieved": [
+        "inferno-architecture:4",
+        "inference-serving:3",
+        "inferno-architecture:0",
+        "retrieval-and-observability:1",
+        "inference-serving:1"
+      ],
+      "top_score": 0.473684
+    },
+    {
+      "abstain": null,
+      "bucket": "multi_chunk",
+      "grounded": 0.0,
+      "hit": 1.0,
+      "id": "rag-043",
+      "mrr": 0.25,
+      "question": "How does the platform both turn away excess traffic at the edge and decide when to add more capacity?",
+      "recall": 0.5,
+      "retrieved": [
+        "inferno-architecture:2",
+        "inferno-architecture:4",
+        "retrieval-and-observability:1",
+        "inference-serving:1",
+        "inference-serving:2"
+      ],
+      "top_score": 0.222222
+    },
+    {
+      "abstain": null,
+      "bucket": "multi_chunk",
+      "grounded": 1.0,
+      "hit": 1.0,
+      "id": "rag-044",
+      "mrr": 1.0,
+      "question": "What is the division of labor between the gateway and the workers?",
+      "recall": 1.0,
+      "retrieved": [
+        "inferno-architecture:2",
+        "inference-serving:1",
+        "inference-serving:2",
+        "inferno-architecture:0",
+        "inferno-architecture:1"
+      ],
+      "top_score": 0.5
+    },
+    {
+      "abstain": 1.0,
+      "bucket": "unanswerable",
+      "grounded": null,
+      "hit": null,
+      "id": "rag-045",
+      "mrr": null,
+      "question": "How much does an Inferno enterprise license cost per worker node?",
+      "recall": null,
+      "retrieved": [
+        "inferno-architecture:0",
+        "inferno-architecture:4",
+        "inference-serving:0",
+        "inference-serving:4",
+        "inference-serving:5"
+      ],
+      "top_score": 0.272727
+    },
+    {
+      "abstain": 1.0,
+      "bucket": "unanswerable",
+      "grounded": null,
+      "hit": null,
+      "id": "rag-046",
+      "mrr": null,
+      "question": "Which minimum Redis version is required to run the job queue?",
+      "recall": null,
+      "retrieved": [
+        "inferno-architecture:3",
+        "inferno-architecture:0",
+        "inferno-architecture:4",
+        "retrieval-and-observability:1",
+        "inference-serving:3"
+      ],
+      "top_score": 0.454545
+    },
+    {
+      "abstain": 1.0,
+      "bucket": "unanswerable",
+      "grounded": null,
+      "hit": null,
+      "id": "rag-047",
+      "mrr": null,
+      "question": "What authentication scheme does the REST API use for client credentials?",
+      "recall": null,
+      "retrieved": [
+        "inferno-architecture:0",
+        "inference-serving:0",
+        "inference-serving:2",
+        "inference-serving:3",
+        "inferno-architecture:2"
+      ],
+      "top_score": 0.363636
+    },
+    {
+      "abstain": 1.0,
+      "bucket": "unanswerable",
+      "grounded": null,
+      "hit": null,
+      "id": "rag-048",
+      "mrr": null,
+      "question": "How many GPUs are recommended per worker for a 70 billion parameter model?",
+      "recall": null,
+      "retrieved": [
+        "inferno-architecture:4",
+        "inferno-architecture:2",
+        "inference-serving:0",
+        "inference-serving:2",
+        "inference-serving:3"
+      ],
+      "top_score": 0.461538
+    },
+    {
+      "abstain": 1.0,
+      "bucket": "unanswerable",
+      "grounded": null,
+      "hit": null,
+      "id": "rag-049",
+      "mrr": null,
+      "question": "Is there an official Terraform provider for provisioning Inferno on AWS?",
+      "recall": null,
+      "retrieved": [
+        "inferno-architecture:0",
+        "inference-serving:0",
+        "inference-serving:2",
+        "inference-serving:4",
+        "inferno-architecture:2"
+      ],
+      "top_score": 0.272727
+    },
+    {
+      "abstain": 1.0,
+      "bucket": "unanswerable",
+      "grounded": null,
+      "hit": null,
+      "id": "rag-050",
+      "mrr": null,
+      "question": "Who maintains the project, and under which open source license is it released?",
+      "recall": null,
+      "retrieved": [
+        "retrieval-and-observability:1",
+        "inference-serving:2",
+        "inferno-architecture:1",
+        "retrieval-and-observability:0",
+        "inference-serving:0"
+      ],
+      "top_score": 0.384615
+    }
+  ],
+  "k": 5,
+  "metrics": {
+    "abstain_margin": 0.0762,
+    "abstention": 1.0,
+    "groundedness": 0.8864,
+    "hit@5": 0.9091,
+    "mrr": 0.8,
+    "primary": 0.92,
+    "recall@5": 0.8902
+  },
+  "n": 50,
+  "per_item": {
+    "rag-001": 1.0,
+    "rag-002": 1.0,
+    "rag-003": 1.0,
+    "rag-004": 1.0,
+    "rag-005": 1.0,
+    "rag-006": 0.0,
+    "rag-007": 1.0,
+    "rag-008": 1.0,
+    "rag-009": 1.0,
+    "rag-010": 1.0,
+    "rag-011": 1.0,
+    "rag-012": 1.0,
+    "rag-013": 1.0,
+    "rag-014": 1.0,
+    "rag-015": 1.0,
+    "rag-016": 1.0,
+    "rag-017": 1.0,
+    "rag-018": 1.0,
+    "rag-019": 1.0,
+    "rag-020": 1.0,
+    "rag-021": 1.0,
+    "rag-022": 1.0,
+    "rag-023": 1.0,
+    "rag-024": 1.0,
+    "rag-025": 1.0,
+    "rag-026": 1.0,
+    "rag-027": 1.0,
+    "rag-028": 1.0,
+    "rag-029": 1.0,
+    "rag-030": 0.0,
+    "rag-031": 1.0,
+    "rag-032": 1.0,
+    "rag-033": 1.0,
+    "rag-034": 1.0,
+    "rag-035": 0.0,
+    "rag-036": 0.0,
+    "rag-037": 1.0,
+    "rag-038": 1.0,
+    "rag-039": 1.0,
+    "rag-040": 1.0,
+    "rag-041": 1.0,
+    "rag-042": 1.0,
+    "rag-043": 1.0,
+    "rag-044": 1.0,
+    "rag-045": 1.0,
+    "rag-046": 1.0,
+    "rag-047": 1.0,
+    "rag-048": 1.0,
+    "rag-049": 1.0,
+    "rag-050": 1.0
+  },
+  "retriever": "lexical-baseline"
+}

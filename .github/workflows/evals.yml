@@ -1,0 +1,123 @@
+name: Evals & Failure Injection
+
+# Tiered on purpose. The cheap, deterministic layers gate every pull request;
+# the expensive and timing-sensitive ones run on a schedule and on demand.
+# A chaos test that blocks merges gets deleted within a month, and a CI job that
+# downloads a model stack on every push gets switched off shortly after that.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 03:17 UTC daily. Off the hour so it is not queued behind everyone else's
+    # midnight cron.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # --------------------------------------------------------------------------- #
+  # PR lane. Scorers, dataset validity, runner and gate against the lexical      #
+  # baseline. No model downloads, so it costs about a minute and can gate.       #
+  # --------------------------------------------------------------------------- #
+  eval-gate:
+    name: Evals · gate (lexical baseline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Install core dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Unit-test the scorers and validate the golden set
+        run: pytest backend/tests/test_evals.py -p no:cacheprovider
+      - name: Run the eval and enforce the gate
+        run: python -m evals gate --retriever lexical --out reports/lexical.json
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-lexical
+          path: reports/lexical.json
+          if-no-files-found: warn
+
+  # --------------------------------------------------------------------------- #
+  # Failure injection. Needs a real Redis and real worker processes, so it is    #
+  # its own job with a service container. Fast enough to gate: the reclaim wait  #
+  # is 400ms, and the rest is process startup.                                   #
+  # --------------------------------------------------------------------------- #
+  failure-injection:
+    name: Failure injection · worker crash and reclaim
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Install core dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Kill a worker mid-job and prove the reclaim
+        env:
+          INFERNO_REDIS__URL: redis://localhost:6379/15
+        # -s so the measured recovery time is printed into the log; that number
+        # is the point of the test, not just its pass/fail.
+        run: pytest backend/tests/failure -m failure -s -p no:cacheprovider
+
+  # --------------------------------------------------------------------------- #
+  # Nightly lane: the real embedding + cross-encoder stack. Too slow and too     #
+  # bandwidth-hungry for every PR, but this is the number that actually          #
+  # describes the served system, so it must run on a schedule rather than only   #
+  # when someone remembers.                                                      #
+  # --------------------------------------------------------------------------- #
+  eval-real-model:
+    name: Evals · real RAG model (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Install core + CPU ML stack
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-ml-cpu.txt
+      # Weights are the slowest part of this job and they never change between
+      # runs, so cache them on the pinned model names.
+      - name: Cache model weights
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-minilm-msmarco-v1
+      - name: Run the eval against the served model
+        run: python -m evals gate --retriever rag --out reports/rag.json
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-rag
+          path: reports/rag.json
+          if-no-files-found: warn

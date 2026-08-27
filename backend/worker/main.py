@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import socket
+import sys
 import time
 import uuid
 
@@ -37,6 +38,14 @@ from backend.worker.batcher import BatchWindow
 from backend.worker.lifecycle import GracefulShutdown
 from backend.worker.runner import BatchItem, run_batch
 from backend.worker.watchdog import InferenceWatchdog
+
+#: Exit status used by the fault-injection crash point, distinct from 1 so a
+#: test can tell a deliberate crash from an ordinary unhandled error.
+CRASH_EXIT_CODE = 137
+
+#: Set to "1" to make the worker die between reading a batch and publishing it.
+#: Off unless explicitly exported; see ``Worker._maybe_crash``.
+CRASH_AFTER_READ_ENV = "INFERNO_CRASH_AFTER_READ"
 
 
 def _make_worker_id(prefix: str) -> str:
@@ -98,6 +107,7 @@ class Worker:
                 if not items:
                     self._heartbeat(WorkerState.IDLE)
                     continue
+                self._maybe_crash(len(items))
                 self._process(items, window_closed_ts)
                 # force=True: _process just wrote a forced RUNNING heartbeat, so
                 # an unforced write here is always inside the rate-limit window
@@ -162,6 +172,34 @@ class Worker:
             "batch_processed", batch_size=len(items), errors=errors,
             total=self._jobs_processed,
         )
+
+    def _maybe_crash(self, batch_size: int) -> None:
+        """Fault-injection seam: die after reading a batch, before publishing it.
+
+        This is the exact window the durability claim rests on. The entries have
+        been delivered by ``XREADGROUP`` so they are pending against this
+        consumer, but nothing has been published or acked yet -- a crash here
+        must leave the work reclaimable rather than lost. Killing the process
+        from outside at the right instant is a race; a deterministic crash point
+        makes the test reproducible.
+
+        ``os._exit`` and not ``sys.exit``: ``sys.exit`` raises ``SystemExit``,
+        which the loop's ``finally`` would catch on the way out, running the
+        drain heartbeat and potentially an ack. The test would then pass for the
+        wrong reason. ``os._exit`` skips ``finally`` blocks, ``atexit`` handlers
+        and buffer flushes, which is what an OOM kill or a lost node looks like.
+
+        Guarded by an environment variable that nothing sets in production.
+        """
+
+        if os.environ.get(CRASH_AFTER_READ_ENV) != "1":
+            return
+        self._log.error("crash_point_fired", batch_size=batch_size)
+        # Flush explicitly: os._exit will not, and the log line is the only clue
+        # in the test output that the crash was deliberate.
+        sys.stderr.flush()
+        sys.stdout.flush()
+        os._exit(CRASH_EXIT_CODE)
 
     def _maybe_reclaim(self) -> None:
         t = get_settings().timeouts
