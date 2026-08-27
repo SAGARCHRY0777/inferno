@@ -108,7 +108,7 @@ jobs:
       # Weights are the slowest part of this job and they never change between
       # runs, so cache them on the pinned model names.
       - name: Cache model weights
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/huggingface
           key: hf-minilm-msmarco-v1
