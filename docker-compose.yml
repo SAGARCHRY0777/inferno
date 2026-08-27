@@ -154,6 +154,27 @@ services:
     volumes:
       - model-cache:/app/artifacts
 
+  # --- MCP server: the models as agent-callable tools ------------------------ #
+  # Runs in SSE mode so it is reachable over the network (stdio mode is for a
+  # local client like Claude Desktop, which launches the process itself).
+  # Point an MCP client at http://localhost:8200/sse
+  #
+  # It is a pure CLIENT of the gateway's public REST/WS API — it imports nothing
+  # from the gateway — so it needs no Redis and scales independently.
+  mcp:
+    build: .
+    depends_on:
+      gateway:
+        condition: service_healthy
+    command: ["python", "-m", "backend.mcp_server.server"]
+    environment:
+      INFERNO_MCP_TRANSPORT: sse
+      INFERNO_MCP_HOST: 0.0.0.0
+      INFERNO_MCP_PORT: "8200"
+      INFERNO_MCP_GATEWAY: http://gateway:8000
+    ports:
+      - "127.0.0.1:8200:8200"
+
   # --- streaming chat service (local LLM, SSE, RAG-grounded via the gateway) -- #
   chat:
     build: .

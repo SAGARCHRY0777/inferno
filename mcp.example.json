@@ -1,11 +1,27 @@
 {
-  "_comment": "Inferno MCP server config. Copy the 'inferno' block into your MCP client's config (Claude Desktop: %APPDATA%\\Claude\\claude_desktop_config.json on Windows, ~/Library/Application Support/Claude/claude_desktop_config.json on macOS), then restart the client. Make sure the Inferno gateway + workers are running (scripts\\run-all.bat). Edit the two absolute paths to match your machine.",
+  "_comment": "Inferno MCP server config — pick ONE of the blocks below, copy it into your MCP client's config under 'mcpServers', and restart the client. Claude Desktop: %APPDATA%\\Claude\\claude_desktop_config.json (Windows), ~/Library/Application Support/Claude/claude_desktop_config.json (macOS). The Inferno gateway + workers must be running (scripts\\run-all.bat, or `docker compose up`).",
+
+  "_option_1_docker": "RECOMMENDED — no local Python environment needed. Requires `docker compose up` (or at least the gateway) to be running. host.docker.internal lets the container reach a gateway on your host; on Linux add --add-host=host.docker.internal:host-gateway.",
+  "_option_2_local_python": "Use your own interpreter. Edit BOTH absolute paths to match your machine.",
+  "_option_3_sse": "Already running the compose stack? The `mcp` service exposes SSE at http://localhost:8200/sse — point any SSE-capable MCP client there instead of spawning a process.",
+
   "mcpServers": {
     "inferno": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "--add-host=host.docker.internal:host-gateway",
+        "-e", "INFERNO_MCP_GATEWAY=http://host.docker.internal:8000",
+        "inferno-gateway:ci",
+        "python", "-m", "backend.mcp_server.server"
+      ]
+    },
+
+    "_inferno_local_python": {
       "command": "C:\\Users\\YOU\\AppData\\Local\\miniconda3\\envs\\test\\python.exe",
       "args": ["-m", "backend.mcp_server.server"],
       "env": {
-        "PYTHONPATH": "D:\\project\\inferno",
+        "PYTHONPATH": "D:\\GITHUB\\inferno",
         "INFERNO_MCP_GATEWAY": "http://127.0.0.1:8000"
       }
     }

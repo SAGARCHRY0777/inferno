@@ -300,6 +300,45 @@ Covered by 12 new tests, including a guard that fails if the express-first lane
 ordering is ever flipped — without it, priority would silently stop working while
 every routing test still passed.
 
+### 🤖 The MCP server is now deployable — and actually tested
+
+Nine working agent tools existed but **nothing deployed or exercised them**: no
+Compose service, no k8s manifest, no CI coverage, and a launcher that assumed
+Windows + a conda env named `test`. A rename or bad import would have shipped
+silently and surfaced as "no tools available" inside someone's client.
+
+A correction to my own earlier note: I said it belonged in Compose and k8s as-is.
+That was wrong — it used **stdio** transport, which the MCP *client* spawns and
+talks to over pipes, so a long-lived Deployment would have had nothing connected
+to it. The fix was to add the transport that makes networked deployment
+meaningful:
+
+| Mode | What it is | Used by |
+|---|---|---|
+| `stdio` (default) | client spawns the process, pipes | Claude Desktop |
+| `sse` | HTTP service on `:8200`, at `/sse` | Compose, k8s, remote clients |
+
+An invalid `INFERNO_MCP_TRANSPORT` exits immediately rather than silently falling
+back to stdio and looking like a hung service.
+
+Shipped with it:
+
+* **6 contract tests** — every expected tool is registered, every tool has a
+  description (an MCP client shows it to the model, so a blank one is useless),
+  `INFERNO_MCP_GATEWAY` drives both the REST and `wss://` bases, and both
+  transports dispatch correctly. These run in CI with no Redis and no models.
+  *The tool-name test earned its keep immediately: it caught that I had guessed
+  `infer` when the real tool is `run_inference`.*
+* **Compose service** (`mcp`, SSE, bound to loopback) and a **k8s Deployment +
+  Service** with probes — selectors and ports cross-checked.
+* **`scripts/run-mcp.sh`** — macOS/Linux, no conda assumption, logs to stderr
+  because on stdio **stdout is the protocol channel** and a stray byte corrupts
+  the JSON-RPC stream.
+* **`mcp.example.json` rewritten** with a **Docker block that needs no local
+  Python** — previously it required hand-editing two absolute Windows paths.
+
+Verified by actually running it: SSE mode returns **HTTP 200 on `/sse`**.
+
 ### 🚀 Auto-deploy that actually fires
 
 Render's "Auto-Deploy: On Commit" was enabled but **never fired** — the Events

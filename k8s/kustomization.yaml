@@ -10,6 +10,7 @@ resources:
   - gateway.yaml
   - workers.yaml
   - chat.yaml
+  - mcp.yaml
   - frontend.yaml
   - ingress.yaml
   - pdb.yaml

@@ -30,7 +30,17 @@ GATEWAY = os.environ.get("INFERNO_MCP_GATEWAY", "http://127.0.0.1:8000").rstrip(
 API = f"{GATEWAY}/api/v1"
 WS = GATEWAY.replace("https://", "wss://").replace("http://", "ws://")
 
-mcp = FastMCP("inferno")
+# Transport:
+#   stdio (default) -- the MCP client launches this process and talks over pipes.
+#                      This is what Claude Desktop does; nothing listens on a port.
+#   sse             -- run as a long-lived HTTP service other machines/containers
+#                      can reach. This is the mode docker-compose and k8s use;
+#                      point a client at http://<host>:<port>/sse.
+TRANSPORT = os.environ.get("INFERNO_MCP_TRANSPORT", "stdio").strip().lower()
+HOST = os.environ.get("INFERNO_MCP_HOST", "0.0.0.0")
+PORT = int(os.environ.get("INFERNO_MCP_PORT", "8200"))
+
+mcp = FastMCP("inferno", host=HOST, port=PORT)
 
 
 # --------------------------------------------------------------------------- #
@@ -234,7 +244,13 @@ async def get_metrics() -> dict:
 
 
 def main() -> None:
-    mcp.run()  # stdio transport
+    if TRANSPORT not in ("stdio", "sse"):
+        raise SystemExit(
+            f"INFERNO_MCP_TRANSPORT must be 'stdio' or 'sse', got {TRANSPORT!r}"
+        )
+    # NOTE: never print to stdout on the stdio transport -- stdout *is* the
+    # protocol channel, and stray output corrupts the JSON-RPC stream.
+    mcp.run(transport=TRANSPORT)  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

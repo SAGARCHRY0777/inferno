@@ -1,0 +1,63 @@
+# MCP server — Inferno's models exposed as agent-callable tools.
+#
+# Deployed in **SSE mode**, which is the only mode that makes sense in a cluster:
+# the default stdio transport is spawned by the MCP client itself and speaks over
+# pipes, so a long-lived Deployment would sit there with nothing connected to it.
+# In SSE mode it is a normal HTTP service — point an SSE-capable MCP client at
+# http://<ingress-or-port-forward>/sse.
+#
+# It is a pure CLIENT of the gateway's public REST/WS API (it imports nothing
+# from the gateway), so it needs no Redis, no model weights and no GPU — hence
+# the small resource envelope.
+#
+#   kubectl -n inferno port-forward svc/mcp 8200:8200
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp
+  namespace: inferno
+  labels: { app: mcp }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mcp }
+  template:
+    metadata:
+      labels: { app: mcp }
+    spec:
+      containers:
+        - name: mcp
+          image: ghcr.io/sagarchry0777/inferno:latest
+          command: ["python", "-m", "backend.mcp_server.server"]
+          env:
+            - { name: INFERNO_MCP_TRANSPORT, value: "sse" }
+            - { name: INFERNO_MCP_HOST, value: "0.0.0.0" }
+            - { name: INFERNO_MCP_PORT, value: "8200" }
+            # In-cluster Service DNS for the gateway.
+            - { name: INFERNO_MCP_GATEWAY, value: "http://gateway:8000" }
+          envFrom:
+            - configMapRef: { name: inferno-config }
+          ports:
+            - { name: sse, containerPort: 8200 }
+          readinessProbe:
+            tcpSocket: { port: 8200 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 8200 }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp
+  namespace: inferno
+  labels: { app: mcp }
+spec:
+  selector: { app: mcp }
+  ports:
+    - { name: sse, port: 8200, targetPort: 8200 }

@@ -235,21 +235,37 @@ becomes an **agent that orchestrates the platform** on its own: detect objects,
 transcribe audio, classify text, run semantic search, and read live metrics.
 
 Tools: `list_models`, `health`, `classify_text`, `detect_objects` (URL or base64),
-`transcribe_audio` (URL or base64), `semantic_search`, `run_inference`,
-`get_metrics`. The server is a thin, decoupled **client** of the gateway's public
-REST + WebSocket API (it never imports the gateway), so it scales independently.
+`transcribe_audio` (URL or base64), `semantic_search`, `rag_search`,
+`run_inference`, `get_metrics`. The server is a thin, decoupled **client** of the
+gateway's public REST + WebSocket API (it never imports the gateway), so it
+scales and deploys independently.
 
-Wire it into Claude Desktop by copying the `inferno` block from
-[`mcp.example.json`](mcp.example.json) into your `claude_desktop_config.json`
-(fix the two paths), then restart Claude. With the gateway + workers running
-(`scripts\run-all.bat`), ask Claude things like *"what objects are in this image
-URL?"* or *"transcribe this audio and tell me the sentiment"* — it calls the
-tools itself.
+### Two transports
+
+| Mode | What it is | Use it for |
+| --- | --- | --- |
+| **`stdio`** (default) | The MCP client spawns the process and talks over pipes. Nothing listens on a port. | Claude Desktop and other local clients |
+| **`sse`** | A normal long-lived HTTP service on `:8200`, reachable at `/sse`. | Docker Compose, Kubernetes, remote clients |
+
+Select with `INFERNO_MCP_TRANSPORT=stdio|sse`. Anything else exits immediately
+rather than silently falling back and looking like a hung service.
 
 ```bash
-# manual smoke test (stdio MCP server -> running gateway)
-python -m backend.mcp_server.server
+scripts\run-mcp.bat                 # Windows · stdio
+./scripts/run-mcp.sh                # macOS/Linux · stdio
+./scripts/run-mcp.sh sse            # network service on :8200
+docker compose up mcp               # containerised, SSE at localhost:8200/sse
+kubectl -n inferno port-forward svc/mcp 8200:8200   # in-cluster
 ```
+
+Wire it into Claude Desktop by copying a block from
+[`mcp.example.json`](mcp.example.json) into your `claude_desktop_config.json`,
+then restarting Claude. The **Docker block needs no local Python environment** —
+it runs the published image and reaches your gateway via
+`host.docker.internal`. With the gateway + workers running
+(`scripts\run-all.bat` or `docker compose up`), ask Claude things like *"what
+objects are in this image URL?"* or *"transcribe this audio and tell me the
+sentiment"* — it calls the tools itself.
 
 ## Configuration
 
