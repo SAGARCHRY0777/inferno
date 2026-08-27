@@ -51,6 +51,34 @@ class ModelSpec(PydanticModel):
     task: TaskType = TaskType.CLASSIFICATION
     description: str = ""
     params: dict = Field(default_factory=dict)
+    version: str = Field(
+        default="",
+        description=(
+            "Optional operator-set version tag (e.g. '2024-11-a', a git sha, a weights "
+            "digest). Bump it whenever the weights or params change: it is part of the "
+            "result-cache key and is recorded on every history row, so a stale cached "
+            "answer can never outlive the model that produced it."
+        ),
+    )
+
+    def fingerprint(self) -> str:
+        """Identity of the *artifact*, not just the name.
+
+        Two models can share a `name` across a weights swap — that is exactly the
+        dangerous case. Derived from `kind`, `params` and `version`, so changing
+        `model_id`, a weights path or the version tag all produce a new
+        fingerprint without the operator having to remember to bump anything.
+        """
+
+        import hashlib
+        import json
+
+        material = json.dumps(
+            {"kind": self.kind, "params": self.params, "version": self.version},
+            sort_keys=True,
+            default=str,
+        )
+        return hashlib.sha256(material.encode()).hexdigest()[:12]
 
 
 @lru_cache(maxsize=1)

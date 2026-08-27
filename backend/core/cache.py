@@ -26,10 +26,35 @@ from backend.core.schemas import InferenceResult
 _log = get_logger("cache")
 
 
-def make_key(model_name: str, payload: str) -> str:
-    """Stable content hash for a (model, input) pair."""
+def _model_fingerprint(model_name: str) -> str:
+    """Artifact identity for a model, or "" if it isn't registered here.
 
-    return hashlib.sha256(f"{model_name}\x00{payload}".encode()).hexdigest()
+    Looked up lazily and defensively: the cache must never be the reason a
+    request fails, so an unknown model degrades to a name-only key rather than
+    raising.
+    """
+
+    try:
+        from backend.models.registry import load_specs
+
+        spec = load_specs().get(model_name)
+        return spec.fingerprint() if spec else ""
+    except Exception:  # noqa: BLE001 - cache keying must not break the request path
+        return ""
+
+
+def make_key(model_name: str, payload: str) -> str:
+    """Stable content hash for a (model, ARTIFACT, input) triple.
+
+    The fingerprint is what makes this safe across a weights swap. Keyed on
+    `model_name + payload` alone, changing `params.model_id` or a weights file
+    and restarting the worker left the gateway serving the PREVIOUS model's
+    answers for up to `cache.ttl_s` — silently, with no way to tell from the
+    result. A new artifact now simply misses the cache.
+    """
+
+    fp = _model_fingerprint(model_name)
+    return hashlib.sha256(f"{model_name}\x00{fp}\x00{payload}".encode()).hexdigest()
 
 
 class CacheReader:

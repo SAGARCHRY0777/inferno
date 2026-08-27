@@ -18,6 +18,11 @@ spec:
       labels:
         app: chat
     spec:
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: chat
           image: ghcr.io/sagarchry0777/inferno:latest

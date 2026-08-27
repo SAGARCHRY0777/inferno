@@ -7,7 +7,7 @@ import { categoryForDetection, type LatLng, routeThrough } from "@/lib/fleet";
 import {
   asDetected,
   isDetected,
-  isLocal,
+  isEvictable,
   makeWorldFleet,
   spawnAt,
   spawnLocal,
@@ -211,12 +211,22 @@ export function WorldFleet({
     for (let i = inView; i < MIN_IN_VIEW; i++) {
       arr.push(spawnLocal([c.lat, c.lng], spread, undefined, roads ?? undefined));
     }
-    // Bound the growth from panning around: retire the oldest LOCAL vehicles
-    // first so the worldwide fleet itself is never culled.
-    const localCount = arr.reduce((n, v) => (isLocal(v) ? n + 1 : n), 0);
-    if (localCount > MAX_LOCAL) {
-      let toDrop = localCount - MAX_LOCAL;
-      fleet.current = arr.filter((v) => !(toDrop > 0 && isLocal(v) && toDrop--));
+    // Bound the growth from panning around by retiring the oldest AMBIENT local
+    // vehicles. Detected vehicles are excluded: they are the user's own YOLO
+    // result, and evicting them first deleted exactly what the feature exists to
+    // show. The worldwide fleet is never evicted either.
+    const evictable = arr.reduce((n, v) => (isEvictable(v) ? n + 1 : n), 0);
+    if (evictable > MAX_LOCAL) {
+      let toDrop = evictable - MAX_LOCAL;
+      const kept: WorldVehicle[] = [];
+      for (const v of arr) {
+        if (toDrop > 0 && isEvictable(v)) {
+          toDrop--;          // explicit loop: the old filter relied on a
+          continue;          // postfix-decrement side effect inside a predicate
+        }
+        kept.push(v);
+      }
+      fleet.current = kept;
     }
     cull(false);
   };

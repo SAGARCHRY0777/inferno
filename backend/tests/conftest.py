@@ -13,36 +13,65 @@ from collections import deque
 import pytest
 
 from backend.broker.base import AsyncBroker, ConsumedEntry, WorkerBroker
-from backend.core.config import Settings
+from backend.core.config import Settings, get_settings
 from backend.core.schemas import InferenceResult, Job, WorkerHeartbeat
 
 
 class FakeWorkerBroker(WorkerBroker):
-    """In-memory worker broker for batcher/runner tests."""
+    """In-memory worker broker for batcher/runner tests.
+
+    Models the **two lanes** the real broker has (express + normal), because a
+    single queue cannot express the bug it needs to catch: ``read_more`` once
+    read only the normal lane, so every batch was capped at "1 express job + N
+    normal" and raising a job's priority silently cost it batching. A
+    laneless fake made that invisible to every unit test.
+
+    Draining rules mirror ``RedisWorkerBroker``: express is served first, and a
+    single read may span both lanes.
+    """
 
     def __init__(self) -> None:
-        self.pending: deque[ConsumedEntry] = deque()
+        self.express: deque[ConsumedEntry] = deque()
+        self.normal: deque[ConsumedEntry] = deque()
         self.acked: list[str] = []
         self.published: list[InferenceResult] = []
         self.heartbeats: list[WorkerHeartbeat] = []
         self._ids = itertools.count(1)
 
+    @property
+    def pending(self) -> deque[ConsumedEntry]:
+        """Everything still queued, express first (kept for existing tests)."""
+
+        return deque(list(self.express) + list(self.normal))
+
+    def _lane_for(self, job: Job) -> deque[ConsumedEntry]:
+        threshold = get_settings().queue.express_priority_min
+        return self.express if job.priority >= threshold else self.normal
+
     def preload(self, jobs: list[Job]) -> None:
         for job in jobs:
-            self.pending.append((f"{next(self._ids)}-0", job))
+            # Express ids carry the same marker prefix the real broker uses, so
+            # tests can assert which lane an entry came from.
+            prefix = "x|" if self._lane_for(job) is self.express else ""
+            self._lane_for(job).append((f"{prefix}{next(self._ids)}-0", job))
+
+    def _drain(self, count: int) -> list[ConsumedEntry]:
+        out: list[ConsumedEntry] = []
+        for lane in (self.express, self.normal):  # express first
+            while lane and len(out) < count:
+                out.append(lane.popleft())
+        return out
 
     # -- WorkerBroker interface -------------------------------------------- #
     def ensure_topology(self, model_name: str) -> None:  # noqa: D401
         pass
 
     def read_first(self, model_name, consumer, *, block_ms):
-        return self.pending.popleft() if self.pending else None
+        got = self._drain(1)
+        return got[0] if got else None
 
     def read_more(self, model_name, consumer, *, count):
-        out: list[ConsumedEntry] = []
-        while self.pending and len(out) < count:
-            out.append(self.pending.popleft())
-        return out
+        return self._drain(count)
 
     def ack(self, model_name, entry_ids):
         self.acked.extend(entry_ids)

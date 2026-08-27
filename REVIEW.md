@@ -1,5 +1,31 @@
 # 🔍 Code review — Inferno
 
+> **Round 3 (28 Aug 2026) — audit follow-up.** An independent three-way critique
+> (backend / frontend / architecture) plus direct verification produced the fixes
+> below. Headline: **the gateway went from 0% to 81% coverage** — before this, not
+> one test imported `routes.py`, `security.py` or `result_router.py`, so every
+> API guarantee in this document rested on nothing.
+>
+> | Fixed | What it was |
+> |---|---|
+> | **Express lane never batched** | `read_more` read only the normal lane, so a batch was capped at "1 express + N normal". Raising a job's priority *cost* it batching and made it slower. Introduced during the priority-lane work; the laneless test fake is why no test caught it. Both are fixed |
+> | **Detected vehicles evicted first** | `isLocal` matched the `WD-` prefix, so the culler retired YOLO-detected vehicles — the exact thing the feature exists to show — before ambient traffic |
+> | **Game timers survived a mode switch** | `reset()` never drained the timer registry, so a queued Dispatch callback fired into Intercept: new OSRM request, hijacked player car, points credited to the wrong game |
+> | **`asDetected` was a silent no-op** | It rewrote an id prefix that only matched `spawnLocal` output. Vehicle identity is now a real `kind: "world" \| "local" \| "detected"` discriminant, and ids are monotonic (they are React keys) |
+> | **Stale results after a weights swap** | The cache key was `model_name + payload`. Changing `params.model_id` and restarting served the *previous* model's answers for 300s, undetectably. The key now includes an artifact fingerprint over kind + params + version |
+> | **The drain test proved nothing** | It waited for the queue to empty *before* stopping, so no batch was ever in flight. It now stops on the first result with the backlog non-empty, and asserts zero loss *and* zero duplicates. `Worker.request_stop()` is public, so the test no longer pokes privates |
+> | **k8s killed workers mid-batch** | No `terminationGracePeriodSeconds` (30s default) against a 120s inference watchdog. Now 150s, so the graceful drain survives scale-downs and rolling updates |
+> | **Everything ran as root** | The image that actually deploys had no `USER`. Now uid 10001, with `runAsNonRoot` + `fsGroup` on every pod — `fsGroup` is required, or a non-root worker cannot write the model cache |
+> | **Stale README claims** | "29 tests" → 134, "5 reference models" → 7, an unsourced "~12× faster" cache figure removed, and `docs/EVALUATION.md` linked from the architecture section — it was previously unreachable from the front page |
+>
+> **New tests: 86 → 134.** `test_gateway_api.py` (22, HTTP contract), `test_result_router.py` (8, delivery concurrency), `test_security.py` (12, auth + proxy-header spoofing), `test_cache_key.py` (9, artifact fingerprinting), `test_priority_batching.py` (4) plus a real-Redis express-batching guard.
+>
+> Still open and deliberately not done here: moving Fleet Command to its own
+> repo, the `git filter-repo` history rewrite, a real model in the live demo, and
+> the cross-tenant `/history` scoping — the first two rewrite published history
+> or delete a feature, and belong to the owner.
+
+
 **Reviewed:** 26 August 2026 · commit `dcfa9e2` (`main`)
 **Scope:** whole repository — backend (5.4k LOC Python), frontend (React + TS),
 Docker, Kubernetes, CI, dependencies, documentation.

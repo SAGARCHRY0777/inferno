@@ -10,6 +10,8 @@ import { bearing, type LatLng } from "./fleet";
 
 type Loc = [number, number, string]; // lat, lng, name
 
+export type VehicleKind = "world" | "local" | "detected";
+
 const AIRPORTS: Loc[] = [
   [40.64, -73.78, "JFK"], [33.94, -118.41, "LAX"], [41.98, -87.9, "ORD"], [37.62, -122.38, "SFO"],
   [47.45, -122.31, "SEA"], [43.68, -79.61, "YYZ"], [19.44, -99.07, "MEX"], [51.47, -0.45, "LHR"],
@@ -50,6 +52,18 @@ const OCEAN: Loc[] = [
 
 export interface WorldVehicle {
   id: string;
+  /**
+   * What this vehicle IS — the discriminant that decides how it renders and
+   * whether the culler may retire it.
+   *
+   *   world    the ambient worldwide fleet (never evicted)
+   *   local    short-hop traffic seeded around the current view (evictable)
+   *   detected spawned from a YOLO detection; renders gold, never evicted
+   *
+   * Previously inferred by parsing an id prefix, which silently mis-classified
+   * vehicles and made `asDetected` a no-op on anything not created by spawnLocal.
+   */
+  kind: VehicleKind;
   car: Car;
   domain: Domain;
   from: LatLng;
@@ -83,6 +97,9 @@ export interface WorldVehicle {
 }
 
 const rnd = (n: number) => Math.floor(Math.random() * n);
+let _seq = 0;
+/** Monotonic id: these are React keys, so collisions show up as ghost markers. */
+const nextId = (prefix: string) => `${prefix}-${++_seq}`;
 const pick = <T,>(a: T[]): T => a[rnd(a.length)];
 /**
  * Shortest longitude difference, accounting for the ±180° seam.
@@ -287,6 +304,7 @@ export function makeWorldFleet(n: number): WorldVehicle[] {
     const t = Math.random();
     out.push({
       id: `WV-${i}`,
+      kind: "world",
       car,
       domain,
       from,
@@ -402,7 +420,8 @@ export function spawnLocal(
     const a = roadPath[seg];
     const b = roadPath[seg + 1];
     return {
-      id: `WL-${rnd(1e9)}`, // WL = local, so the culler can retire these first
+      id: nextId("WL"),
+      kind: "local",
       car,
       domain: "road",
       from: a,
@@ -426,7 +445,8 @@ export function spawnLocal(
   const from = jitter();
   const to = jitter();
   return {
-    id: `WL-${rnd(1e9)}`,
+    id: nextId("WL"),
+    kind: "local",
     car,
     domain: "road",
     from,
@@ -444,9 +464,14 @@ export function spawnLocal(
   };
 }
 
-/** True for a vehicle created by {@link spawnLocal}. */
+/**
+ * True for any vehicle seeded around the current view (ambient or detected).
+ *
+ * Used to decide what the culler may retire. Detected vehicles are deliberately
+ * EXCLUDED from `isEvictable` below — see the note there.
+ */
 export function isLocal(v: WorldVehicle): boolean {
-  return v.id.startsWith("WL-") || v.id.startsWith("WD-");
+  return v.kind === "local" || v.kind === "detected";
 }
 
 /**
@@ -457,12 +482,27 @@ export function isLocal(v: WorldVehicle): boolean {
  * photo you submitted.
  */
 export function isDetected(v: WorldVehicle): boolean {
-  return v.id.startsWith("WD-");
+  return v.kind === "detected";
+}
+
+/**
+ * True for vehicles the culler may retire when the fleet grows past its cap.
+ *
+ * Only ambient local traffic qualifies. Detected vehicles are the user's own
+ * result — the thing the whole YOLO→Fleet feature exists to show — so evicting
+ * them first (which is what happened while `isLocal` matched them) deleted
+ * exactly the vehicles that mattered. The worldwide fleet is never evicted.
+ */
+export function isEvictable(v: WorldVehicle): boolean {
+  return v.kind === "local";
 }
 
 /** Tag a locally-spawned vehicle as coming from a detection. */
 export function asDetected(v: WorldVehicle): WorldVehicle {
-  return { ...v, id: v.id.replace(/^WL-/, "WD-"), fromName: "detected", toName: "detected" };
+  // Set the discriminant rather than rewriting an id prefix: the old version
+  // only matched "WL-", so applying it to a vehicle from spawnAt silently
+  // returned it unchanged and it stayed cyan ambient traffic.
+  return { ...v, kind: "detected", fromName: "detected", toName: "detected" };
 }
 
 export function spawnAt(center: LatLng, car?: Car): WorldVehicle {
@@ -471,7 +511,8 @@ export function spawnAt(center: LatLng, car?: Car): WorldVehicle {
   const dest = destFor(center, domain, used.type);
   const to: LatLng = [dest[0], dest[1]];
   return {
-    id: `WV-${Date.now()}-${rnd(1e6)}`,
+    id: nextId("WV"),
+    kind: "world",
     car: used,
     domain,
     from: center,

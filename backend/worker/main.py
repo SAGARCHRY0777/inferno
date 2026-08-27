@@ -77,6 +77,16 @@ class Worker:
         )
 
     # -- public ------------------------------------------------------------- #
+    def request_stop(self) -> None:
+        """Ask the worker to finish its in-flight batch and exit.
+
+        The same thing SIGTERM does, without needing a signal — so a test can
+        stop a worker mid-stream rather than reaching into ``_shutdown``, and so
+        an embedding process can shut a worker down directly.
+        """
+
+        self._shutdown.request_stop()
+
     def run(self) -> None:
         self._shutdown.install()
         self._broker.ensure_topology(self._model_name)

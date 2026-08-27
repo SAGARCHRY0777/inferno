@@ -17,6 +17,19 @@ spec:
   template:
     metadata: { labels: { app: worker, model: dummy-echo } }
     spec:
+      # The watchdog allows a forward pass up to timeouts.inference_timeout_s
+      # (120s). With the 30s default, Kubernetes SIGKILLs a worker mid-batch on
+      # every scale-down and rolling update -- silently defeating the graceful
+      # drain that lifecycle.py exists to provide. 150s = watchdog + headroom.
+      terminationGracePeriodSeconds: 150
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        # fsGroup is required, not optional: the model-cache volume is created
+        # root-owned, so a non-root container could not write downloaded weights
+        # into it and every ML worker would fail on first load.
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: worker
           image: ghcr.io/sagarchry0777/inferno:latest
@@ -55,6 +68,19 @@ spec:
   template:
     metadata: { labels: { app: worker, model: distilbert-sentiment } }
     spec:
+      # The watchdog allows a forward pass up to timeouts.inference_timeout_s
+      # (120s). With the 30s default, Kubernetes SIGKILLs a worker mid-batch on
+      # every scale-down and rolling update -- silently defeating the graceful
+      # drain that lifecycle.py exists to provide. 150s = watchdog + headroom.
+      terminationGracePeriodSeconds: 150
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        # fsGroup is required, not optional: the model-cache volume is created
+        # root-owned, so a non-root container could not write downloaded weights
+        # into it and every ML worker would fail on first load.
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: worker
           image: ghcr.io/sagarchry0777/inferno:latest
@@ -97,6 +123,19 @@ spec:
   template:
     metadata: { labels: { app: worker, model: resnet-image } }
     spec:
+      # The watchdog allows a forward pass up to timeouts.inference_timeout_s
+      # (120s). With the 30s default, Kubernetes SIGKILLs a worker mid-batch on
+      # every scale-down and rolling update -- silently defeating the graceful
+      # drain that lifecycle.py exists to provide. 150s = watchdog + headroom.
+      terminationGracePeriodSeconds: 150
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        # fsGroup is required, not optional: the model-cache volume is created
+        # root-owned, so a non-root container could not write downloaded weights
+        # into it and every ML worker would fail on first load.
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: worker
           image: ghcr.io/sagarchry0777/inferno:latest
@@ -139,6 +178,19 @@ spec:
   template:
     metadata: { labels: { app: worker, model: yolo-detect } }
     spec:
+      # The watchdog allows a forward pass up to timeouts.inference_timeout_s
+      # (120s). With the 30s default, Kubernetes SIGKILLs a worker mid-batch on
+      # every scale-down and rolling update -- silently defeating the graceful
+      # drain that lifecycle.py exists to provide. 150s = watchdog + headroom.
+      terminationGracePeriodSeconds: 150
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        # fsGroup is required, not optional: the model-cache volume is created
+        # root-owned, so a non-root container could not write downloaded weights
+        # into it and every ML worker would fail on first load.
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: worker
           image: ghcr.io/sagarchry0777/inferno:latest
@@ -182,6 +234,19 @@ spec:
   template:
     metadata: { labels: { app: worker, model: whisper-transcribe } }
     spec:
+      # The watchdog allows a forward pass up to timeouts.inference_timeout_s
+      # (120s). With the 30s default, Kubernetes SIGKILLs a worker mid-batch on
+      # every scale-down and rolling update -- silently defeating the graceful
+      # drain that lifecycle.py exists to provide. 150s = watchdog + headroom.
+      terminationGracePeriodSeconds: 150
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        # fsGroup is required, not optional: the model-cache volume is created
+        # root-owned, so a non-root container could not write downloaded weights
+        # into it and every ML worker would fail on first load.
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: worker
           image: ghcr.io/sagarchry0777/inferno:latest
@@ -224,6 +289,19 @@ spec:
   template:
     metadata: { labels: { app: worker, model: rag-search } }
     spec:
+      # The watchdog allows a forward pass up to timeouts.inference_timeout_s
+      # (120s). With the 30s default, Kubernetes SIGKILLs a worker mid-batch on
+      # every scale-down and rolling update -- silently defeating the graceful
+      # drain that lifecycle.py exists to provide. 150s = watchdog + headroom.
+      terminationGracePeriodSeconds: 150
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        # fsGroup is required, not optional: the model-cache volume is created
+        # root-owned, so a non-root container could not write downloaded weights
+        # into it and every ML worker would fail on first load.
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: worker
           image: ghcr.io/sagarchry0777/inferno:latest
@@ -269,6 +347,19 @@ spec:
   template:
     metadata: { labels: { app: worker, model: semantic-search } }
     spec:
+      # The watchdog allows a forward pass up to timeouts.inference_timeout_s
+      # (120s). With the 30s default, Kubernetes SIGKILLs a worker mid-batch on
+      # every scale-down and rolling update -- silently defeating the graceful
+      # drain that lifecycle.py exists to provide. 150s = watchdog + headroom.
+      terminationGracePeriodSeconds: 150
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        # fsGroup is required, not optional: the model-cache volume is created
+        # root-owned, so a non-root container could not write downloaded weights
+        # into it and every ML worker would fail on first load.
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: worker
           image: ghcr.io/sagarchry0777/inferno:latest

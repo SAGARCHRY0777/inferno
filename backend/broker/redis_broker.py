@@ -169,7 +169,12 @@ class RedisWorkerBroker(WorkerBroker):
         resp = self._client.xreadgroup(
             self._group,
             consumer,
-            {keys.job_stream(model_name): _NEW_MESSAGES},
+            # BOTH lanes, express first -- same as read_first. Reading only the
+            # normal lane here capped every batch at "1 express + N normal",
+            # because read_first takes count=1. A burst of 500 express jobs then
+            # ran as 500 batches of one instead of ~16 of 32, so raising a job's
+            # priority made it *slower* by costing it batching entirely.
+            self._lanes(model_name),
             count=count,
             block=None,  # non-blocking: return whatever is available right now
         )

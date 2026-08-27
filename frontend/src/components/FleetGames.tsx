@@ -218,6 +218,18 @@ export function FleetGames({
     timersRef.current.push(id);
     return id;
   };
+  /**
+   * Drop every pending timer. Must run on BOTH exit paths, not just unmount:
+   * `reset()` (called by startMode) used to leave them armed, so starting
+   * Dispatch, taking an order and switching to Intercept within 1.1s let the
+   * queued callback fire into the new game — setting status, firing a pointless
+   * OSRM request, hijacking the intercept player car, and then crediting points
+   * in a game that never earned them.
+   */
+  const clearTimers = () => {
+    timersRef.current.forEach(window.clearTimeout);
+    timersRef.current = [];
+  };
   useEffect(() => {
     const timers = timersRef;
     return () => {
@@ -271,6 +283,7 @@ export function FleetGames({
     "focusable rounded-lg border border-hairline px-2 py-1.5 text-left text-[11px] text-ink-muted hover:bg-surface-hover";
 
   const reset = () => {
+    clearTimers(); // pending game callbacks must not survive into the next mode
     setRunning(false);
     setPv(null);
     arriveRef.current = null;

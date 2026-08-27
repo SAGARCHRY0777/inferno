@@ -54,9 +54,9 @@ chase).</sub>
 | **Backpressure** — HTTP 429 + `Retry-After` with hysteresis | [`backend/gateway/backpressure.py`](backend/gateway/backpressure.py) |
 | **Priority lanes** — express stream drained before the normal lane (Redis Streams are FIFO, so priority is *routing*, not sorting) | [`backend/broker/redis_broker.py`](backend/broker/redis_broker.py) |
 | **Task-typed, model-agnostic plugins** (classification · detection · transcription) + config-driven registry | [`backend/models/`](backend/models/) |
-| **5 reference models** — text sentiment, image classify, **object detection**, **speech-to-text**, dummy | [`backend/models/models.yaml`](backend/models/models.yaml) |
+| **7 reference models** — text sentiment, image classify, **object detection**, **speech-to-text**, semantic search, RAG, dummy | [`backend/models/models.yaml`](backend/models/models.yaml) |
 | **Optional API-key auth + per-client quotas** (Redis-backed, multi-replica safe) | [`backend/gateway/security.py`](backend/gateway/security.py) |
-| **Result cache** (skip recompute on repeated inputs; ~12× faster on a hit) | [`backend/core/cache.py`](backend/core/cache.py) |
+| **Result cache** (skip recompute on repeated inputs — a hit skips the queue and the forward pass entirely) | [`backend/core/cache.py`](backend/core/cache.py) |
 | **Perf toggles**: `torch.compile` + INT8/FP16 quantization, faster-whisper (CTranslate2) | [`backend/models/runtime.py`](backend/models/runtime.py) |
 | **RAG retrieval** — chunked corpus, bi-encoder retrieve → cross-encoder rerank → **cited passages** | [`backend/models/rag.py`](backend/models/rag.py) |
 | **Embeddings + semantic search** and **per-model live metrics** | [`backend/models/semantic_search.py`](backend/models/semantic_search.py) |
@@ -65,6 +65,8 @@ chase).</sub>
 | **Streaming chat** — local LLM, **SSE token streaming**, answers **grounded in RAG** with citations | [`backend/chat/`](backend/chat/) |
 | **Real-time result delivery** over a single-connection WS fan-out | [`backend/gateway/result_router.py`](backend/gateway/result_router.py) |
 | **Full observability** — Prometheus `/metrics`, live metrics WS, structured JSON logs | [`backend/core/metrics.py`](backend/core/metrics.py) |
+| **Quality gates** — a frozen 50-item golden set, a committed baseline, and a gate that fails the build on regression | [`docs/EVALUATION.md`](docs/EVALUATION.md), [`evals/`](evals/) |
+| **Failure injection** — a worker killed mid-batch, asserting the job is redelivered and never lost | [`backend/tests/failure/`](backend/tests/failure/) |
 | **Graceful shutdown** — drain in-flight batch, zero job loss | [`backend/worker/lifecycle.py`](backend/worker/lifecycle.py) |
 | **Fault isolation** — one bad input never crashes a worker | [`backend/worker/runner.py`](backend/worker/runner.py) |
 | **CPU/GPU portability** — `device=auto`, guarded NVML telemetry | [`backend/models/runtime.py`](backend/models/runtime.py), [`backend/core/sysinfo.py`](backend/core/sysinfo.py) |
@@ -80,6 +82,11 @@ chase).</sub>
 > **Serving your own model:** [`docs/BRING-YOUR-OWN-MODEL.md`](docs/BRING-YOUR-OWN-MODEL.md)
 > — Hugging Face, ONNX, YOLO and Whisper weights need no code, just a `models.yaml`
 > entry and a worker; writing a new `kind` is one file.
+>
+> **How quality is measured:** [`docs/EVALUATION.md`](docs/EVALUATION.md) — the
+> frozen golden set, the committed baseline, the paired significance test used to
+> decide whether a retrieval change is real, and an honest account of where the
+> harness can still mislead you.
 
 ```
         ┌──────────────────────────────────────────────────────────┐
@@ -489,7 +496,7 @@ and pull (Prometheus) views never disagree.
 ## Testing & verification
 
 ```bash
-pytest backend/tests            # 29 tests; integration auto-skips without Redis
+pytest backend/tests            # 134 tests; integration auto-skips without Redis
 pytest backend/tests -m "not ml"  # skip heavy torch paths (what CI's fast job runs)
 ruff check backend              # lint (clean)
 cd frontend && npm run build    # typecheck + production build
@@ -536,8 +543,9 @@ inferno/
 │  │               · dummy.py · distilbert.py · resnet_onnx.py
 │  ├─ gateway/     app · routes · ws · backpressure · result_router · dependencies
 │  ├─ worker/      main · batcher · runner · lifecycle
-│  └─ tests/       percentiles · batcher · backpressure · models · runner
-│                  · schemas · integration (round-trip + graceful drain)
+│  └─ tests/       percentiles · batcher · backpressure · models · runner · schemas
+│                  · priority (routing + batching) · watchdog · MCP contract · evals
+│                  · integration (round-trip + drain) · failure/ (crash injection)
 ├─ frontend/       Vite + React + TS + Tailwind + Framer Motion + Recharts + Zustand
 ├─ scripts/        install-*.bat · run-*.bat · fetch-redis.ps1 · loadgen · screenshot
 ├─ loadtest/       locustfile.py
