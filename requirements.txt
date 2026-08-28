@@ -19,7 +19,11 @@ prometheus-client==0.21.1
 psutil==6.1.1
 PyYAML==6.0.2
 python-multipart==0.0.32
-websockets==17.1
+# Held on the 16.x line ON PURPOSE: websockets 17.x requires Python >=3.11,
+# and this project's floor is 3.10 (pyproject requires-python, the 3.10-slim
+# Dockerfile, and every CI job). Bumping to 17.1 turned all four backend jobs
+# red at the install step. Neither line carries an advisory.
+websockets==16.1.1
 anyio==4.14.2
 
 # Optional GPU telemetry. The import is guarded, so this is safe on CPU-only
