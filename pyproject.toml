@@ -19,7 +19,7 @@ dynamic = ["dependencies"]
 # cannot encode — install them from the requirements files instead:
 #   pip install -r requirements-ml-cpu.txt     # CPU
 #   pip install -r requirements-ml-gpu.txt     # CUDA 12.4
-dev = ["ruff>=0.6", "mypy>=1.10", "build", "conda-pack"]
+dev = ["ruff>=0.16.5", "mypy>=2.3.1", "build", "conda-pack"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
