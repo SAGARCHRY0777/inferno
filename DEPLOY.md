@@ -22,8 +22,11 @@ free tier doesn't require one), no separate Redis/worker/frontend services.
 2. Sign up at **[render.com](https://render.com)** (free; "Sign in with GitHub").
 3. **New + → Blueprint** → pick `SAGARCHRY0777/inferno` → **Apply**. Render reads
    [`deploy/render.yaml`](deploy/render.yaml) and builds the one service.
-4. Wait ~3–5 min for the build. Open the service URL (e.g.
-   `https://inferno.onrender.com`) — that's your **live demo**.
+4. Wait ~3–5 min for the build. Open the service URL Render gives you — that's
+   your **live demo**. Render appends a random suffix when the bare name is
+   taken, so it will look like `https://inferno-ny28.onrender.com` rather than
+   `https://inferno.onrender.com`. **Use the URL from your own dashboard**:
+   `inferno.onrender.com` is somebody else's service.
 
 What works on it: the full dashboard, **stress test** (live throughput/latency/
 batch charts), submitting **dummy-echo** text jobs, 20 themes, the command
