@@ -1,0 +1,61 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ☕ Keep the demo warm
+#
+# The public demo runs on a free Render instance, which spins down after ~15
+# minutes of inactivity. A cold start then takes ~30 seconds and the first
+# request gets an HTTP 503 — which is exactly what a reviewer clicking the
+# demo link on the README sees, once, before closing the tab.
+#
+# So this pings the health endpoint on a schedule to keep the instance awake.
+#
+# Two honest caveats:
+#   * GitHub's scheduled runners are best-effort and are frequently delayed
+#     under load, so a 10-minute cron does not guarantee a 10-minute interval.
+#     An external pinger (UptimeRobot's free tier, cron-job.org) is more
+#     reliable; this is the zero-signup version of the same idea.
+#   * GitHub disables scheduled workflows on repositories with no activity for
+#     60 days. If the demo starts sleeping again, check that first.
+#
+# It never fails the run: a sleeping demo is not a broken build, and a red X in
+# the Actions tab for a warm-up ping would be noise on top of the CI signal.
+# ─────────────────────────────────────────────────────────────────────────────
+name: ☕ Keep demo warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *" # every 10 min; Render sleeps at ~15 min idle
+  workflow_dispatch: # manual wake-up before sharing the link
+
+# A queued warm-up is worthless once the next one is due — keep only the newest.
+concurrency:
+  group: keepalive
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping the live demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake the instance
+        run: |
+          BASE="https://inferno-ny28.onrender.com"
+
+          # --max-time 90 covers a full cold start (~30s) with headroom.
+          # --retry 2 rides out the 503 the instance serves while booting.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+                   --max-time 90 --retry 2 --retry-delay 15 \
+                   --retry-all-errors \
+                   "$BASE/api/v1/health" || echo "000")
+
+          echo "GET /api/v1/health -> $code"
+
+          if [ "$code" = "200" ]; then
+            echo "::notice::Demo is awake (200)."
+          else
+            # Not a failure: the next scheduled ping is the retry.
+            echo "::warning::Demo returned $code — likely still booting."
+          fi
