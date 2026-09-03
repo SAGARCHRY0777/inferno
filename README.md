@@ -578,3 +578,8 @@ Still open:
 ## License
 
 MIT — see `LICENSE`.
+
+---
+
+**Sagar Chaudhary** — AI Engineer, industrial & manufacturing AI · Bengaluru  
+[Portfolio](https://sagarchry0777.github.io) · [GitHub](https://github.com/SAGARCHRY0777) · [LinkedIn](https://www.linkedin.com/in/sagar-chaudhary777/)
