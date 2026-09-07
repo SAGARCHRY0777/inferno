@@ -14,8 +14,8 @@ starlette==1.6.0
 redis==5.2.1
 pydantic==2.13.4
 pydantic-settings==2.15.0
-structlog==24.4.0
-prometheus-client==0.21.1
+structlog==26.1.0
+prometheus-client==0.26.0
 psutil==6.1.1
 PyYAML==6.0.2
 python-multipart==0.0.32
@@ -32,9 +32,9 @@ nvidia-ml-py==12.560.30
 
 # Optional OpenTelemetry tracing (imports are guarded; only used when
 # INFERNO_OTEL__ENABLED=true).
-opentelemetry-sdk==1.29.0
-opentelemetry-exporter-otlp-proto-http==1.29.0
-opentelemetry-instrumentation-fastapi==0.50b0
+opentelemetry-sdk==1.44.0
+opentelemetry-exporter-otlp-proto-http==1.44.0
+opentelemetry-instrumentation-fastapi==0.65b0
 
 # MCP server (exposes the models as agent tools). Kept on the 1.x line ON
 # PURPOSE: mcp 2.x renamed FastMCP -> MCPServer, so backend/mcp_server/server.py
