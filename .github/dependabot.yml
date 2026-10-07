@@ -27,8 +27,16 @@ updates:
       # the group unresolvable. transformers 5.18 wants tokenizers>=0.23.1
       # against a pin of 0.22.2, and pip gives up. Same failure the react group
       # had before react-leaflet joined it.
+      # torch and torchvision are deliberately NOT here. They are installed from
+      # PyTorch's own index with local version identifiers -- +cu124 for GPU,
+      # plain for CPU -- and dependabot resolves from PyPI, which carries
+      # neither. Left in the group it rewrote requirements-ml-gpu.txt from
+      # torch==2.5.1+cu124 to torch==2.14.1+cpu: not a bump, a silent swap of
+      # the GPU stack for a CPU one. There is also no 2.14 on the cu124 index,
+      # which stops at 2.6.0, so moving torch means choosing a new CUDA target.
+      # That is an infrastructure decision and belongs in a hand-written PR.
       ml:
-        patterns: ["torch*", "torchvision", "onnxruntime*", "ultralytics", "transformers", "sentence-transformers", "faster-whisper", "tokenizers", "safetensors"]
+        patterns: ["onnxruntime*", "ultralytics", "transformers", "sentence-transformers", "faster-whisper", "tokenizers", "safetensors"]
       observability:
         patterns: ["opentelemetry*", "prometheus-client", "structlog"]
       dev:
