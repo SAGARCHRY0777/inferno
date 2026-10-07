@@ -56,11 +56,18 @@ updates:
     labels: ["dependencies", "frontend"]
     groups:
       react:
-        patterns: ["react", "react-dom", "@types/react*"]
+      # react-leaflet belongs here, not in `ui`, for the same reason fastapi and
+      # starlette share a group above: its peer range is pinned to one react
+      # major, so splitting them produces an uninstallable combination. That is
+      # not hypothetical -- react-leaflet 4.2.1 caps at `react ^18.0.0`, so the
+      # react 19 PR failed `npm ci` with ERESOLVE before it could build, and
+      # react-leaflet 5.0.0 requires `react ^19.0.0`, so it cannot land on its
+      # own either. They only work as a pair.
+        patterns: ["react", "react-dom", "@types/react*", "react-leaflet"]
       build:
         patterns: ["vite", "@vitejs/*", "typescript", "eslint*", "@typescript-eslint/*"]
       runtime:
-        patterns: ["leaflet", "react-leaflet", "framer-motion", "recharts", "zustand"]
+        patterns: ["leaflet", "framer-motion", "recharts", "zustand"]
 
   # --- GitHub Actions -------------------------------------------------------- #
   # Pinned action versions go stale too, and a deprecated runner image is a
