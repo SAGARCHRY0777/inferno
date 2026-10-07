@@ -54,7 +54,15 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "C4"]
-ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
+ignore = [
+  "B008",   # FastAPI Depends() in defaults is idiomatic
+  # PEP 695 type parameters, which 3.12 enables. Rewriting BaseModel to
+  # `class BaseModel[Batch, RawOutput](ABC)` is a readability change to the
+  # contract every model plugin subclasses, not something the floor move
+  # forces -- unlike the StrEnum backport, which the move made dead code.
+  # Worth doing on its own, where the diff is the point.
+  "UP046",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "backend/models/semantic_search.py" = ["E501"]  # readable long corpus sentences

@@ -88,7 +88,7 @@ class ResultRouter:
             if cached is not None:
                 return InferenceResult.model_validate_json(cached)
             return await asyncio.wait_for(future, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
         except asyncio.CancelledError:
             # stop() cancels every pending waiter on gateway shutdown. Without

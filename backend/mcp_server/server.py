@@ -69,7 +69,7 @@ async def _infer(model: str, input_type: str, payload: str, timeout: float = 120
     try:
         async with websockets.connect(f"{WS}{accepted['result_ws']}") as ws:
             message = json.loads(await asyncio.wait_for(ws.recv(), timeout=timeout))
-    except (asyncio.TimeoutError, OSError) as exc:
+    except (TimeoutError, OSError) as exc:
         return {"error": f"no result within {timeout:.0f}s: {exc}"}
 
     if message.get("type") != "result":
@@ -232,7 +232,7 @@ async def get_metrics() -> dict:
     try:
         async with websockets.connect(f"{WS}/api/v1/ws/metrics") as ws:
             snap = json.loads(await asyncio.wait_for(ws.recv(), timeout=10.0))["data"]
-    except (asyncio.TimeoutError, OSError) as exc:
+    except (TimeoutError, OSError) as exc:
         return {"error": f"metrics unavailable: {exc}"}
     return {
         "requests_per_sec": snap["requests_per_sec"],
