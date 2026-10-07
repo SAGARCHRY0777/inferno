@@ -17,6 +17,12 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: ["dependencies", "python"]
+    ignore:
+      # See the note on the ml group: PyPI carries neither the +cu124 nor the
+      # CPU-index build, so any automated torch bump is wrong by construction.
+      # Ungrouped it would simply arrive as its own PR instead.
+      - dependency-name: "torch"
+      - dependency-name: "torchvision"
     groups:
       # Web stack moves together: FastAPI pins a starlette range, so bumping one
       # without the other produces an uninstallable combination.
