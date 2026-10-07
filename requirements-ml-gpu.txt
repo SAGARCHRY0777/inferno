@@ -16,8 +16,8 @@ torch==2.5.1+cu124
 torchvision==0.20.1+cu124
 onnxruntime-gpu==1.30.0   # 1.20.1 was pulled from PyPI; this is the nearest patch
 onnx==1.22.0
-transformers==5.18.0  # 4.x line: sentence-transformers pins transformers<5
-tokenizers==0.23.2  # highest stable in transformers 4.57.x's >=0.22.0,<=0.23.0
+transformers==5.18.0  # 5.x line: sentence-transformers 6.x requires it
+tokenizers==0.23.2  # inside transformers 5.18's >=0.23.1,<0.24.0
 safetensors==0.8.0
 ultralytics==8.4.172
 faster-whisper==1.2.1
