@@ -21,7 +21,7 @@ ENV VITE_CHAT_URL=$VITE_CHAT_URL
 RUN npm run build
 
 # 2) Runtime: python + an in-container Redis + the app.
-FROM python:3.10-slim
+FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 

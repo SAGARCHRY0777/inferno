@@ -10,7 +10,7 @@ These need admin rights, so install them yourself on the new PC:
 
 | Prerequisite | Why | Link |
 | --- | --- | --- |
-| **Miniconda** | creates the Python 3.10 env + ML deps | https://docs.conda.io/en/latest/miniconda.html |
+| **Miniconda** | creates the Python 3.12 env + ML deps | https://docs.conda.io/en/latest/miniconda.html |
 | **Node.js 20+** | builds/serves the React frontend | https://nodejs.org |
 | *(GPU only)* NVIDIA driver + CUDA-capable GPU | runs models on GPU; otherwise it auto-falls back to CPU | — |
 

@@ -253,7 +253,7 @@ than handing callers each other's answers.
 > `scripts\run-all.bat`). Full guide: **[SETUP.md](SETUP.md)**.
 
 ```bat
-:: 1. Install the Python stack into a conda env named "test" (Python 3.10).
+:: 1. Install the Python stack into a conda env named "test" (Python 3.12).
 ::    Pick ONE:
 scripts\install-gpu.bat      :: CUDA 12.4 build (NVIDIA GPU)
 scripts\install-cpu.bat      :: CPU-only build
@@ -297,7 +297,7 @@ zero config). **No credit card.** Render → **New + → Blueprint** → pick th
 
 ### Reproduce or copy the environment
 
-Three ways to rebuild the exact Python env (conda `test`, Python 3.10, CUDA 12.4)
+Three ways to rebuild the exact Python env (conda `test`, Python 3.12, CUDA 12.4)
 — full guide in **[ENVIRONMENT.md](ENVIRONMENT.md)**:
 
 - **Recipe** — `conda env create -f environment.yml` (or `pip install -r requirements.lock.txt`)
@@ -310,7 +310,7 @@ resolve on recreate. Regenerate every artifact with `scripts\export-env.bat`.
 ### Quickstart (conda, any OS)
 
 ```bash
-conda create -n test python=3.10 -y && conda activate test
+conda create -n test python=3.12 -y && conda activate test
 pip install -r requirements.txt
 pip install -r requirements-ml-gpu.txt     # or requirements-ml-cpu.txt
 # Redis: docker compose up redis   (or any local Redis / Memurai)
@@ -502,7 +502,7 @@ ruff check backend              # lint (clean)
 cd frontend && npm run build    # typecheck + production build
 ```
 
-Verified end-to-end on this machine (Windows 10, conda `test` / Python 3.10):
+Verified end-to-end on this machine (Windows 10, conda `test` / Python 3.12):
 
 - **Round trip**: submit → Redis stream → worker → batch window → model → result
   over WS, with full timing breakdown.

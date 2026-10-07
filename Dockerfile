@@ -3,7 +3,7 @@
 # CPU-only ML stack by default for portability. For GPU, base this on an
 # nvidia/cuda:12.4 runtime image and install requirements-ml-gpu.txt instead.
 # --------------------------------------------------------------------------- #
-FROM python:3.10-slim AS base
+FROM python:3.12-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
