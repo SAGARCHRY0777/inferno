@@ -8,9 +8,9 @@
 #
 # Pinned to the exact versions verified on Python 3.10 (conda env `test`).
 # --------------------------------------------------------------------------- #
-fastapi==0.141.1
-uvicorn[standard]==0.52.4
-starlette==1.6.0
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+starlette==1.7.0
 redis==5.2.1
 pydantic==2.13.4
 pydantic-settings==2.15.0
@@ -23,7 +23,7 @@ python-multipart==0.0.32
 # and this project's floor is 3.10 (pyproject requires-python, the 3.10-slim
 # Dockerfile, and every CI job). Bumping to 17.1 turned all four backend jobs
 # red at the install step. Neither line carries an advisory.
-websockets==16.1.1
+websockets==17.2
 anyio==4.14.2
 
 # Optional GPU telemetry. The import is guarded, so this is safe on CPU-only
