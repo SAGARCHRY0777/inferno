@@ -63,7 +63,7 @@ async def _retrieve(query: str) -> list[dict]:
         async with websockets.connect(f"{ws}{accepted['result_ws']}") as sock:
             msg = json.loads(await asyncio.wait_for(sock.recv(), timeout=30.0))
         return msg.get("data", {}).get("predictions", []) if msg.get("type") == "result" else []
-    except (httpx.HTTPError, OSError, asyncio.TimeoutError) as exc:
+    except (TimeoutError, httpx.HTTPError, OSError) as exc:
         _log.warning("rag_retrieval_failed", error=str(exc))
         return []  # degrade gracefully to an ungrounded answer
 

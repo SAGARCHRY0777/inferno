@@ -8,19 +8,10 @@ gives us a single place to evolve the vocabulary of the platform.
 
 from __future__ import annotations
 
-from enum import Enum
-
-
-class StrEnum(str, Enum):
-    """A string-valued enum that serializes to its value.
-
-    Python 3.10 lacks ``enum.StrEnum`` (added in 3.11), so we provide a minimal
-    equivalent. Subclasses behave like plain strings on the wire (JSON, Redis)
-    while remaining type-safe in code.
-    """
-
-    def __str__(self) -> str:  # pragma: no cover - trivial
-        return str(self.value)
+# Members serialize as plain strings on the wire (JSON, Redis) while staying
+# type-safe in code. This was a hand-rolled `class StrEnum(str, Enum)` while the
+# floor was 3.10; the stdlib has had it since 3.11.
+from enum import StrEnum
 
 
 class InputType(StrEnum):

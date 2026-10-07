@@ -1,6 +1,6 @@
 # Reproducing the Python environment
 
-The backend runs in a conda env named **`test`** (Python 3.10, the CUDA 12.4 ML
+The backend runs in a conda env named **`test`** (Python 3.12, the CUDA 12.4 ML
 stack). There are **three** ways to reproduce it — pick by your need.
 
 | Need | Use | Cross-machine? | Internet? | Size |
@@ -28,13 +28,13 @@ conda activate test
 > resolve torch. On a **CPU-only** box, ignore `environment.yml` and build the
 > CPU stack instead:
 > ```bat
-> conda create -n test python=3.10 -y && conda activate test
+> conda create -n test python=3.12 -y && conda activate test
 > pip install -r requirements.txt -r requirements-ml-cpu.txt
 > ```
 
 ## 2. Recipe — `requirements.lock.txt` (exact pip freeze)
 
-For an existing Python 3.10 (conda or venv):
+For an existing Python 3.12 (conda or venv):
 
 ```bat
 pip install -r requirements.lock.txt --extra-index-url https://download.pytorch.org/whl/cu124

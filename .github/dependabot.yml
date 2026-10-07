@@ -22,29 +22,17 @@ updates:
       # without the other produces an uninstallable combination.
       web:
         patterns: ["fastapi", "starlette", "uvicorn*", "python-multipart", "websockets", "httpx"]
+      # tokenizers and safetensors carry no independent version story: both are
+      # pinned to whatever range transformers accepts, so leaving them out makes
+      # the group unresolvable. transformers 5.18 wants tokenizers>=0.23.1
+      # against a pin of 0.22.2, and pip gives up. Same failure the react group
+      # had before react-leaflet joined it.
       ml:
-        patterns: ["torch*", "torchvision", "onnxruntime*", "ultralytics", "transformers", "sentence-transformers", "faster-whisper"]
+        patterns: ["torch*", "torchvision", "onnxruntime*", "ultralytics", "transformers", "sentence-transformers", "faster-whisper", "tokenizers", "safetensors"]
       observability:
         patterns: ["opentelemetry*", "prometheus-client", "structlog"]
       dev:
         patterns: ["pytest*", "ruff", "mypy", "locust"]
-    # Held while the floor is Python 3.10, and worth stating why, because the
-    # usual check does not catch this one. onnxruntime 1.24 ships cp311-cp314
-    # wheels and no sdist, so there is nothing installable for 3.10 -- but its
-    # metadata still declares `requires-python >=3.10`, so a requires-python
-    # audit passes it and only `pip install` finds out. 1.23.2 is the last
-    # version with a cp310 wheel.
-    #
-    # The cost of this hold is real: it blocks the ml group PR, which carries
-    # the transformers and sentence-transformers bumps that close
-    # PYSEC-2026-3929, PYSEC-2026-4174 and PYSEC-2026-4164. Holding
-    # onnxruntime alone lets those land. Remove this entry when the floor
-    # moves to 3.11 -- 3.10 is EOL on 31 October 2026.
-    ignore:
-      - dependency-name: "onnxruntime"
-        versions: [">=1.24"]
-      - dependency-name: "onnxruntime-gpu"
-        versions: [">=1.24"]
 
   # --- Frontend -------------------------------------------------------------- #
   - package-ecosystem: npm
