@@ -54,6 +54,12 @@ export interface ModelInfo {
   input_type: InputType;
   task: TaskType;
   description: string;
+  /**
+   * Whether a worker is up for this model's lane right now. Configured is not
+   * servable: `/infer` rejects an unserved model with 503, so offering one is a
+   * dead end. True when the gateway is too cold to tell, matching `/infer`.
+   */
+  available: boolean;
 }
 
 export interface LatencyPercentiles {

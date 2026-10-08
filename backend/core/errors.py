@@ -68,6 +68,19 @@ class BackpressureError(InfernoError):
     http_status = HTTPStatus.TOO_MANY_REQUESTS
 
 
+class ModelUnavailableError(InfernoError):
+    """The model is configured but no live worker is serving its lane.
+
+    Distinct from :class:`UnknownModelError`: the name is valid and the model
+    would work if a worker for it were running. Separate because the remedy
+    differs -- an unknown model is a client mistake, this is an operator one,
+    and only this case is worth retrying.
+    """
+
+    code = "model_unavailable"
+    http_status = HTTPStatus.SERVICE_UNAVAILABLE
+
+
 class JobTimeoutError(InfernoError):
     """No result was produced within the configured deadline."""
 

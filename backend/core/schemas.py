@@ -244,6 +244,15 @@ class ModelInfo(_Frozen):
     input_type: InputType
     task: TaskType
     description: str
+    # Configured is not the same as servable: a worker loads exactly one model,
+    # so a model in the registry with no live worker cannot run. Submitting to
+    # one is rejected with 503 model_unavailable, and a client that offers it
+    # anyway is inviting a dead end -- so the list says which are real.
+    #
+    # Defaults True so a cold gateway, which cannot yet tell, advertises
+    # normally rather than claiming everything is down. That matches what
+    # /infer does in the same state.
+    available: bool = True
 
 
 class InferAccepted(_Frozen):

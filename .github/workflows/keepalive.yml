@@ -8,13 +8,25 @@
 #
 # So this pings the health endpoint on a schedule to keep the instance awake.
 #
-# Two honest caveats:
-#   * GitHub's scheduled runners are best-effort and are frequently delayed
-#     under load, so a 10-minute cron does not guarantee a 10-minute interval.
-#     An external pinger (UptimeRobot's free tier, cron-job.org) is more
-#     reliable; this is the zero-signup version of the same idea.
-#   * GitHub disables scheduled workflows on repositories with no activity for
-#     60 days. If the demo starts sleeping again, check that first.
+# MEASURED: the schedule below does not work, and cannot be made to work by
+# tuning the cron. Over 144 hours this workflow asked for 144 runs/day and
+# GitHub delivered 5 -- 3.5% -- with a median gap of 288 minutes and a best-ever
+# gap of 154. Render sleeps at ~15 minutes idle, so even the closest pair of runs
+# ever observed was ten times too far apart. The demo was cold for effectively
+# every visitor, and a 33-second first request confirmed it.
+#
+# Keep it anyway for `workflow_dispatch`: a manual wake a minute before sharing
+# the link is genuinely useful, and that path is reliable. Just do not believe
+# the cron.
+#
+# To actually keep it warm, point an external pinger at
+# https://inferno-ny28.onrender.com/api/v1/health every 5 minutes --
+# UptimeRobot's free tier or cron-job.org both do this and both honour the
+# interval. That is a signup, which is why this file exists; it is also the only
+# thing that works.
+#
+# One more caveat, unrelated and still true: GitHub disables scheduled workflows
+# on repositories with no activity for 60 days.
 #
 # It never fails the run: a sleeping demo is not a broken build, and a red X in
 # the Actions tab for a warm-up ping would be noise on top of the CI signal.
