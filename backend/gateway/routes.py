@@ -79,10 +79,52 @@ async def health(
     )
 
 
-@router.get("/models", response_model=list[ModelInfo], tags=["models"])
-async def models() -> list[ModelInfo]:
-    """List servable models from the config-driven registry."""
+def _serving_models(ctx: GatewayContext) -> set[str] | None:
+    """Model names a live worker is currently reading for, or None if unknown.
 
+    A worker loads exactly one model and reads only that model's stream, so a
+    job enqueued to a lane with no live worker has no consumer at all -- and
+    that is invisible to every failure path. Reclaim, ``max_deliveries`` and the
+    watchdog all key off the consumer group's pending list, which only holds
+    entries a worker has already read; an unclaimed entry is in none of them. So
+    such a job is not late, it is unreachable: it sits in the stream forever
+    while the caller waits on a result WebSocket that never delivers.
+
+    Reads the snapshot ``MetricsHub`` already refreshes for the dashboard and
+    the Prometheus collector, so this costs no extra Redis round trip -- its
+    loop runs from the lifespan rather than on client connect, so the snapshot
+    is fresh whether or not a dashboard is open.
+
+    Returns ``None`` rather than an empty set before the first tick, so callers
+    can tell "nothing is served" from "not known yet" and fail open on the
+    second. A cold gateway rejecting all work would be a worse failure than the
+    one this exists to prevent.
+
+    Both ``/infer`` and ``/models`` derive availability from here, so the two
+    endpoints cannot disagree about what is servable.
+    """
+
+    snapshot = ctx.metrics_hub.latest()
+    if snapshot is None:
+        return None
+    return {
+        worker.model_name
+        for worker in snapshot.workers
+        if worker.state not in (WorkerState.DRAINING, WorkerState.STOPPED)
+    }
+
+
+@router.get("/models", response_model=list[ModelInfo], tags=["models"])
+async def models(ctx: GatewayContext = Depends(get_context)) -> list[ModelInfo]:
+    """List models from the registry, each flagged with whether it can run now.
+
+    The registry is config; whether a model is servable depends on a worker
+    being up for its lane. Reporting both means a client can offer only what
+    will actually produce a result, instead of advertising a model that
+    ``/infer`` will reject with 503.
+    """
+
+    serving = _serving_models(ctx)
     return [
         ModelInfo(
             name=s.name,
@@ -90,6 +132,7 @@ async def models() -> list[ModelInfo]:
             input_type=s.input_type,
             task=s.task,
             description=s.description,
+            available=serving is None or s.name in serving,
         )
         for s in list_specs()
     ]
@@ -144,30 +187,14 @@ async def infer(
     if request.model_name not in ctx.model_names:
         raise UnknownModelError(f"unknown model: {request.model_name!r}")
 
-    # A worker loads exactly one model and reads only that model's stream, so a
-    # job enqueued to a lane with no live worker has no consumer at all. That is
-    # invisible to every failure path: reclaim, max_deliveries and the watchdog
-    # all key off the consumer group's pending list, which only holds entries a
-    # worker has already read. An unclaimed entry is in none of them, so the job
-    # sits in the stream indefinitely while the caller waits on a result
-    # WebSocket that never delivers -- no result, no error, no history row.
-    #
-    # Reuses the snapshot MetricsHub already refreshes for the dashboard and the
-    # Prometheus collector, so this costs no extra Redis round trip. Fails open
-    # before the first tick: a cold gateway should not reject work it cannot yet
-    # judge.
-    snapshot = ctx.metrics_hub.latest()
-    if snapshot is not None:
-        serving = {
-            worker.model_name
-            for worker in snapshot.workers
-            if worker.state not in (WorkerState.DRAINING, WorkerState.STOPPED)
-        }
-        if request.model_name not in serving:
-            raise ModelUnavailableError(
-                f"no worker is serving {request.model_name!r}; "
-                f"currently served: {sorted(serving) or 'none'}"
-            )
+    # A job on a lane with no live worker would never fail -- see
+    # _serving_models for why no timeout can reach it.
+    serving = _serving_models(ctx)
+    if serving is not None and request.model_name not in serving:
+        raise ModelUnavailableError(
+            f"no worker is serving {request.model_name!r}; "
+            f"currently served: {sorted(serving) or 'none'}"
+        )
 
     # 3) Result cache: identical (model, input) -> deliver instantly, skip the queue.
     sw = Stopwatch.start()

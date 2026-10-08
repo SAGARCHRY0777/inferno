@@ -35,8 +35,15 @@ export function SubmitPanel() {
   const [express, setExpress] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Falls back to the first *available* model rather than models[0]: a default
+  // selection the gateway would reject with 503 puts the user one click from a
+  // dead end before they have touched anything. Plain models[0] only if nothing
+  // is available, so the panel still renders during a cold start.
   const model: ModelInfo | undefined = useMemo(
-    () => models.find((m) => m.name === modelName) ?? models[0],
+    () =>
+      models.find((m) => m.name === modelName) ??
+      models.find((m) => m.available) ??
+      models[0],
     [models, modelName],
   );
   const activeJob = jobs.find((j) => j.jobId === activeJobId);
@@ -148,13 +155,22 @@ export function SubmitPanel() {
       {/* Model selector */}
       <div className="flex flex-wrap gap-2">
         {models.map((m) => (
+          // A model with no worker is still listed rather than hidden: knowing
+          // the platform serves it, and that nothing is up for it right now, is
+          // more useful than it silently vanishing. But it is not selectable,
+          // because choosing it only earns a 503.
           <button
             key={m.name}
             onClick={() => setModelName(m.name)}
+            disabled={!m.available}
+            aria-disabled={!m.available}
+            title={m.available ? m.description : `${m.name} — no worker running for this model`}
             className={`focusable rounded-lg border px-3 py-1.5 text-xs transition ${
-              model?.name === m.name
-                ? "border-accent/60 bg-accent/10 text-accent shadow-glow"
-                : "border-hairline text-ink-muted hover:bg-surface-hover"
+              !m.available
+                ? "cursor-not-allowed border-hairline/60 text-ink-faint line-through opacity-50"
+                : model?.name === m.name
+                  ? "border-accent/60 bg-accent/10 text-accent shadow-glow"
+                  : "border-hairline text-ink-muted hover:bg-surface-hover"
             }`}
           >
             {m.name}

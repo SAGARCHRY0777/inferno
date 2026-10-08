@@ -424,6 +424,31 @@ def test_models_lists_the_registry(client_factory) -> None:
     assert all({"name", "input_type", "task"} <= set(m) for m in r.json())
 
 
+def test_models_marks_an_unserved_model_unavailable(client_factory) -> None:
+    """Configured is not servable, and the list has to say which.
+
+    /infer rejects an unserved model with 503, so a client that advertises it
+    anyway sends the user into a dead end. Both endpoints read the same
+    live-worker set, so they cannot disagree.
+    """
+
+    client, _ = client_factory(metrics_hub=FakeMetricsHub(serving=["someone-else"]))
+    r = client.get(f"{get_settings().server.api_prefix}/models")
+    assert r.status_code == 200
+    by_name = {m["name"]: m for m in r.json()}
+    assert by_name[MODEL]["available"] is False
+
+
+def test_models_fails_open_before_the_first_tick(client_factory) -> None:
+    """A cold gateway cannot tell, so it advertises normally rather than
+    claiming everything is down -- matching what /infer does in that state."""
+
+    client, _ = client_factory(metrics_hub=FakeColdMetricsHub())
+    r = client.get(f"{get_settings().server.api_prefix}/models")
+    assert r.status_code == 200
+    assert all(m["available"] is True for m in r.json())
+
+
 def test_asyncio_is_available() -> None:
     """Guard against the module-level import being dropped by a linter."""
 
