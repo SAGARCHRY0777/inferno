@@ -17,7 +17,7 @@ pydantic-settings==2.15.0
 structlog==26.1.0
 prometheus-client==0.26.0
 psutil==6.1.1
-PyYAML==6.0.2
+PyYAML==6.0.3
 python-multipart==0.0.32
 # Held on the 16.x line ON PURPOSE: websockets 17.x requires Python >=3.11,
 # and this project's floor is 3.10 (pyproject requires-python, the 3.10-slim
