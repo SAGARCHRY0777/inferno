@@ -22,8 +22,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.core.config import get_settings
+from backend.core.enums import WorkerState
 from backend.core.errors import InfernoError
-from backend.core.schemas import MAX_PAYLOAD_CHARS
+from backend.core.schemas import (
+    MAX_PAYLOAD_CHARS,
+    LatencyPercentiles,
+    MetricsSnapshot,
+    WorkerHeartbeat,
+)
 from backend.gateway import routes as routes_mod
 from backend.gateway.dependencies import GatewayContext
 
@@ -97,6 +103,34 @@ class _Result:
         return self
 
 
+class FakeMetricsHub:
+    """Stands in for the real hub's cached snapshot.
+
+    `/infer` reads the live-worker set from here rather than Redis, so a test
+    decides which lanes have a consumer by constructing one of these.
+    """
+
+    def __init__(self, serving: list[str] | None = None, state: str = WorkerState.IDLE) -> None:
+        self._serving = [MODEL] if serving is None else serving
+        self._state = state
+
+    def latest(self):
+        return MetricsSnapshot(
+            latency_ms=LatencyPercentiles(p50=0.0, p90=0.0, p99=0.0),
+            workers=[
+                WorkerHeartbeat(worker_id=f"w-{i}", model_name=name, state=self._state)
+                for i, name in enumerate(self._serving)
+            ],
+        )
+
+
+class FakeColdMetricsHub:
+    """A gateway that has not completed its first metrics tick yet."""
+
+    def latest(self):
+        return None
+
+
 def _build_app(**overrides) -> tuple[FastAPI, GatewayContext]:
     """A gateway app whose context is entirely fake — no Redis, no lifespan."""
 
@@ -104,7 +138,7 @@ def _build_app(**overrides) -> tuple[FastAPI, GatewayContext]:
         broker=overrides.get("broker") or FakeBroker(),
         backpressure=overrides.get("backpressure") or FakeBackpressure(),
         metrics_reader=None,
-        metrics_hub=None,
+        metrics_hub=overrides.get("metrics_hub") or FakeMetricsHub(),
         result_router=None,
         history_reader=overrides.get("history") or FakeHistoryReader(),
         rate_limiter=overrides.get("limiter") or FakeRateLimiter(),
@@ -193,6 +227,59 @@ def test_infer_accepts_a_valid_job(client_factory) -> None:
     body = r.json()
     assert body["job_id"] and body["result_ws"].endswith(body["job_id"])
     assert len(ctx.broker.enqueued) == 1
+
+
+def test_configured_model_with_no_live_worker_is_503_and_never_enqueued(client_factory) -> None:
+    """The bug this guards: a lane with no consumer swallowed the job silently.
+
+    A worker reads only its own model's stream, and every failure path keys off
+    the consumer group's pending list -- which an unread entry is not in. So the
+    job used to sit in the stream forever: 202 to the caller, then no result, no
+    error and no history row. Failing fast is the whole point, so assert the
+    queue stayed empty as well as the status.
+    """
+
+    broker = FakeBroker()
+    client, _ = client_factory(broker=broker, metrics_hub=FakeMetricsHub(serving=["someone-else"]))
+    r = client.post(
+        f"{get_settings().server.api_prefix}/infer",
+        json={"model_name": MODEL, "input_type": "text", "payload": "hello"},
+    )
+    assert r.status_code == 503
+    assert r.json()["code"] == "model_unavailable"
+    assert broker.enqueued == []
+
+
+def test_draining_worker_does_not_count_as_serving(client_factory) -> None:
+    """A worker on its way out will not pick the job up, so it is not a consumer."""
+
+    broker = FakeBroker()
+    client, _ = client_factory(
+        broker=broker, metrics_hub=FakeMetricsHub(state=WorkerState.DRAINING)
+    )
+    r = client.post(
+        f"{get_settings().server.api_prefix}/infer",
+        json={"model_name": MODEL, "input_type": "text", "payload": "hello"},
+    )
+    assert r.status_code == 503
+    assert broker.enqueued == []
+
+
+def test_cold_gateway_fails_open_rather_than_rejecting(client_factory) -> None:
+    """Before the first metrics tick there is no snapshot to judge by.
+
+    Rejecting then would make every gateway restart briefly refuse all work,
+    which is a worse failure than the one being fixed.
+    """
+
+    broker = FakeBroker()
+    client, _ = client_factory(broker=broker, metrics_hub=FakeColdMetricsHub())
+    r = client.post(
+        f"{get_settings().server.api_prefix}/infer",
+        json={"model_name": MODEL, "input_type": "text", "payload": "hello"},
+    )
+    assert r.status_code == 202
+    assert len(broker.enqueued) == 1
 
 
 def test_unknown_model_is_404_and_never_enqueued(client_factory) -> None:

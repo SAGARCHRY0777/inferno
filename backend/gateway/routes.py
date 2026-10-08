@@ -12,8 +12,13 @@ from fastapi import Request as HTTPRequest
 
 from backend.core import constants as C
 from backend.core.config import get_settings
-from backend.core.enums import JobStatus
-from backend.core.errors import BackpressureError, RateLimitError, UnknownModelError
+from backend.core.enums import JobStatus, WorkerState
+from backend.core.errors import (
+    BackpressureError,
+    ModelUnavailableError,
+    RateLimitError,
+    UnknownModelError,
+)
 from backend.core.logging import get_logger
 from backend.core.redis_client import get_async_redis
 from backend.core.schemas import (
@@ -138,6 +143,31 @@ async def infer(
 
     if request.model_name not in ctx.model_names:
         raise UnknownModelError(f"unknown model: {request.model_name!r}")
+
+    # A worker loads exactly one model and reads only that model's stream, so a
+    # job enqueued to a lane with no live worker has no consumer at all. That is
+    # invisible to every failure path: reclaim, max_deliveries and the watchdog
+    # all key off the consumer group's pending list, which only holds entries a
+    # worker has already read. An unclaimed entry is in none of them, so the job
+    # sits in the stream indefinitely while the caller waits on a result
+    # WebSocket that never delivers -- no result, no error, no history row.
+    #
+    # Reuses the snapshot MetricsHub already refreshes for the dashboard and the
+    # Prometheus collector, so this costs no extra Redis round trip. Fails open
+    # before the first tick: a cold gateway should not reject work it cannot yet
+    # judge.
+    snapshot = ctx.metrics_hub.latest()
+    if snapshot is not None:
+        serving = {
+            worker.model_name
+            for worker in snapshot.workers
+            if worker.state not in (WorkerState.DRAINING, WorkerState.STOPPED)
+        }
+        if request.model_name not in serving:
+            raise ModelUnavailableError(
+                f"no worker is serving {request.model_name!r}; "
+                f"currently served: {sorted(serving) or 'none'}"
+            )
 
     # 3) Result cache: identical (model, input) -> deliver instantly, skip the queue.
     sw = Stopwatch.start()
