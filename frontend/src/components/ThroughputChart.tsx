@@ -51,7 +51,10 @@ export function ThroughputChart() {
                 fontSize: 12,
               }}
               labelFormatter={() => ""}
-              formatter={(v: number, n: string) => [v.toFixed(1), n]}
+              // As in BatchSizeChart: recharts 3 passes `ValueType | undefined`
+              // for the value and `NameType` for the series name, so both are
+              // inferred and the value is coerced before formatting.
+              formatter={(v, n) => [Number(v ?? 0).toFixed(1), n]}
             />
             <Area
               type="monotone"

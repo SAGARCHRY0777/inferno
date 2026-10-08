@@ -46,7 +46,10 @@ export function BatchSizeChart() {
                   borderRadius: 12,
                   fontSize: 12,
                 }}
-                formatter={(v: number) => [v, "batches"]}
+                // recharts 3 widened the formatter's value to
+                // `ValueType | undefined`, so the parameter is inferred rather
+                // than annotated `number` and coerced at the point of use.
+                formatter={(v) => [Number(v ?? 0), "batches"]}
                 labelFormatter={(l) => `size ${l}`}
               />
               <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
