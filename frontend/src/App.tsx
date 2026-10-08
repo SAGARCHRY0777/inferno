@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { useEffect } from "react";
 
 import { ActivityDrawer } from "@/components/ActivityDrawer";
@@ -22,11 +22,17 @@ import { THEMES } from "@/theme/themes";
 import type { HistoryRecord, ModelInfo, TrackedJob } from "@/types";
 
 // Orchestrated staggered entrance for a designed first impression.
-const container = {
+//
+// Annotated as Variants rather than left to inference: framer-motion 14
+// narrowed `ease` to a union of named curves and cubic-bezier tuples, and an
+// un-annotated object widens "easeOut" to `string`, which no longer assigns.
+// The annotation also means a typo in a curve name fails here rather than
+// silently falling back at runtime.
+const container: Variants = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
 };
-const item = {
+const item: Variants = {
   hidden: { opacity: 0, y: 16 },
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
 };
