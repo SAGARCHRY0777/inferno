@@ -139,7 +139,7 @@ def _ensure_kinds_imported() -> None:
     # Heavy/optional kinds -- each imported independently so one missing extra
     # (e.g. ultralytics) never disables the others.
     for module in (
-        "distilbert", "resnet_onnx", "yolo", "whisper_asr",
+        "distilbert", "resnet_onnx", "yolo",
         "faster_whisper_asr", "semantic_search", "rag",
     ):
         try:
