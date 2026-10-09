@@ -7,8 +7,12 @@ time over **WebSockets**, correlated by job id. A live mission-control dashboard
 streams throughput, latency percentiles, queue depth, batch-size distribution,
 worker health, and CPU/GPU utilization.
 
-**▶ Live demo: [inferno-ny28.onrender.com](https://inferno-ny28.onrender.com)** — free
-tier, so the first visit wakes it in ~50s. Heavy ML models run locally; see [DEPLOY.md](DEPLOY.md).
+**▶ [Open the live demo](https://sagarchry0777.github.io/demo/inferno/)** — it runs
+on a free tier, so it sleeps when idle and the first visit waits ~30s while the
+instance boots. That link opens a page that says so and forwards you the moment it
+is up, instead of leaving you on a blank tab. The instance itself is
+[inferno-ny28.onrender.com](https://inferno-ny28.onrender.com) if you would rather
+go straight there. Heavy ML models run locally; see [DEPLOY.md](DEPLOY.md).
 
 ![Inferno demo](docs/demo/inferno-demo.gif)
 
