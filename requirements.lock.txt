@@ -42,8 +42,8 @@ networkx==3.4.2
 numpy==2.2.6
 nvidia-ml-py==12.560.30
 onnx==1.22.0
-onnxruntime==1.30.0
-onnxruntime-gpu==1.30.0   # 1.20.1 was pulled from PyPI; this is the nearest patch
+onnxruntime==1.31.0
+onnxruntime-gpu==1.31.0   # 1.20.1 was pulled from PyPI; this is the nearest patch
 opencv-python==4.13.0.92
 opentelemetry-api==1.45.0
 opentelemetry-exporter-otlp-proto-common==1.45.0
@@ -93,15 +93,15 @@ starlette==1.6.0
 structlog==26.1.0
 sympy==1.13.1
 threadpoolctl==3.6.0
-tokenizers==0.23.2  # highest stable in transformers 4.57.x's >=0.22.0,<=0.23.0
+tokenizers==0.23.3  # highest stable in transformers 4.57.x's >=0.22.0,<=0.23.0
 tomli==2.4.1
 torch==2.5.1+cu124
 torchvision==0.20.1+cu124
 tqdm==4.68.1
-transformers==5.18.0  # 4.x line: sentence-transformers pins transformers<5
+transformers==5.19.0  # 4.x line: sentence-transformers pins transformers<5
 typing_extensions==4.15.0
 tzdata==2026.5
-ultralytics==8.4.172
+ultralytics==8.4.175
 ultralytics-thop==2.0.19
 urllib3==2.7.0
 uvicorn==0.52.4
