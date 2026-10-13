@@ -32,9 +32,9 @@ nvidia-ml-py==12.560.30
 
 # Optional OpenTelemetry tracing (imports are guarded; only used when
 # INFERNO_OTEL__ENABLED=true).
-opentelemetry-sdk==1.45.0
-opentelemetry-exporter-otlp-proto-http==1.45.0
-opentelemetry-instrumentation-fastapi==0.66b0
+opentelemetry-sdk==1.45.1
+opentelemetry-exporter-otlp-proto-http==1.45.1
+opentelemetry-instrumentation-fastapi==0.66b1
 
 # MCP server (exposes the models as agent tools). Kept on the 1.x line ON
 # PURPOSE: mcp 2.x renamed FastMCP -> MCPServer, so backend/mcp_server/server.py
