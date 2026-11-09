@@ -8,9 +8,9 @@
 #
 # Pinned to the exact versions verified on Python 3.10 (conda env `test`).
 # --------------------------------------------------------------------------- #
-fastapi==0.141.1
-uvicorn[standard]==0.52.4
-starlette==1.6.0
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+starlette==1.10.0
 redis==5.2.1
 pydantic==2.13.4
 pydantic-settings==2.15.0
@@ -18,12 +18,12 @@ structlog==26.1.0
 prometheus-client==0.26.0
 psutil==6.1.1
 PyYAML==6.0.2
-python-multipart==0.0.32
+python-multipart==0.0.33
 # Held on the 16.x line ON PURPOSE: websockets 17.x requires Python >=3.11,
 # and this project's floor is 3.10 (pyproject requires-python, the 3.10-slim
 # Dockerfile, and every CI job). Bumping to 17.1 turned all four backend jobs
 # red at the install step. Neither line carries an advisory.
-websockets==16.1.1
+websockets==17.4
 anyio==4.14.2
 
 # Optional GPU telemetry. The import is guarded, so this is safe on CPU-only
